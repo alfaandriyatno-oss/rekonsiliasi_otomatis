@@ -93,8 +93,8 @@ td select{min-width:230px}
 const S={A:null,B:null},$=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmt=n=>new Intl.NumberFormat('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
-const KEYS={date:/tanggal|tgl|date|waktu/i,desc:/ket|uraian|desc|remark|narasi|berita|detail/i,amt:/jumlah|amount|nominal|nilai|mutasi/i,deb:/debet|debit|keluar/i,kre:/kredit|credit|masuk/i,bal:/saldo|balance/i};
-const FIELDS=[['date','Tanggal'],['desc','Keterangan'],['amt','Jumlah'],['deb','Debit'],['kre','Kredit'],['bal','Saldo']];
+const KEYS={date:/tanggal|tgl|date|waktu|posting|valuta/i,desc:/ket|uraian|desc|remark|narasi|berita|detail|particular|rincian/i,amt:/^(?!.*(debet|debit|kredit|credit)).*(jumlah|amount|nominal|nilai|mutasi)/i,deb:/debet|debit|keluar|withdraw|tarik/i,kre:/kredit|credit|masuk|deposit|setor/i,bal:/saldo|balance/i,dc:/^\s*(d\/?k|db\/?cr|dr\/?cr|dc|tipe|jenis|type)\s*$/i};
+const FIELDS=[['date','Tanggal'],['desc','Keterangan'],['amt','Jumlah'],['deb','Debit'],['kre','Kredit'],['bal','Saldo'],['dc','DB/CR']];
 
 if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 async function loadPdf(k,file){
@@ -112,7 +112,7 @@ async function loadPdf(k,file){
     if(!rows.length)throw new Error('PDF tidak berisi teks (kemungkinan hasil scan). Gunakan PDF asli dari sistem atau bank, atau file Excel.');
     const isHead=c=>Object.keys(KEYS).filter(f=>c.some(x=>KEYS[f].test(x.s))).length>=3;
     const dateRe=/\d{1,4}[-\/.]\d{1,2}[-\/.]\d{2,4}|\d{1,2}[ -][A-Za-z]{3,}[ -]\d{2,4}/;
-    const hi=rows.findIndex(isHead);
+    const hi=rows.findIndex(c=>isHead(c)&&c.some(x=>KEYS.date.test(x.s)));
     let aoa;
     if(hi>=0){
       const H=rows[hi],n=H.length,out=[H.map(c=>c.s)];
@@ -126,7 +126,13 @@ async function loadPdf(k,file){
       aoa=out;
     }else{
       const n=Math.max(...rows.map(c=>c.length));
-      aoa=[Array.from({length:n},(_,i)=>'Kolom '+(i+1)),...rows.filter(c=>c.some(x=>dateRe.test(x.s))).map(c=>c.map(x=>x.s))];
+      const P=[],dr=/^(\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?|\d{1,2} [A-Za-z]{3,} \d{2,4})\s*(.*)$/,nr=/\s+(\(?-?\d[\d.,]*\)?(?:\s?(?:DB|CR|DR))?)$/i;
+      rows.forEach(c=>{const t=c.map(x=>x.s).join(' ').trim(),m=t.match(dr);
+        if(!m){if(P.length&&!/saldo|total|halaman|page/i.test(t)&&!/\d[.,]\d{2}\b/.test(t))P[P.length-1][1]+=' '+t;return}
+        let rest=m[2].replace(/^\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?\s+/,''),nums=[],z;while(nums.length<3&&(z=rest.match(nr))&&/[.,]/.test(z[1])){nums.unshift(z[1]);rest=rest.slice(0,z.index)}
+        P.push([m[1],rest.trim(),...nums])});
+      const W=Math.max(...P.map(r=>r.length-2));
+      aoa=[['Tanggal','Keterangan',...Array.from({length:W},(_,i)=>'Angka '+(i+1))],...P.map(r=>{const q=r.slice(2);return [r[0],r[1],...Array(W-q.length).fill(''),...q]})];
     }
     if(aoa.length<2)throw new Error('Baris transaksi tidak ditemukan pada PDF.');
     setData(k,aoa,file.name,rows.slice(0,hi>=0?hi:5).map(c=>c.map(x=>x.s).join(' ')));
@@ -137,7 +143,7 @@ function load(k,file){
   const csv=/\.csv$/i.test(file.name),r=new FileReader();
   r.onload=e=>{try{
     const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
-    const aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:!csv,defval:''});
+    const aoa=wb.SheetNames.map(n=>XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:!csv,defval:''})).sort((a,b)=>b.length-a.length)[0];
     setData(k,aoa,file.name);
   }catch(err){alert('File tidak bisa dibaca: '+err.message)}};
   r.readAsArrayBuffer(file);
@@ -310,6 +316,70 @@ $('demo').onclick=()=>{
   setData('B',[['REKENING KORAN'],['Nama Rekening : CV DIVA BELLE COSMETICS'],['Periode : 01/09/2026 - 30/09/2026'],['Tgl','Uraian','Debit','Kredit','Saldo'],['02/09/2026','TRF MASUK PT MAJU JAYA','',15000000,115000000],['04/09/2026','TRF KELUAR CV SINAR',8700000,'',106300000],['07/09/2026','SETOR TUNAI TOKO BERKAH','',4200000,110500000],['10/09/2026','GAJI KARYAWAN',22500000,'',88000000],['25/09/2026','BUNGA JASA GIRO','',125000,88125000],['30/09/2026','BIAYA ADMIN BANK',50000,'',88075000]],'rekening_koran_contoh.csv');
   run();
 };
+const dtv=x=>typeof x!=='number'&&day(x)!=null;
+const isNum=x=>typeof x==='number'||(typeof x==='string'&&day(x)==null&&/\d/.test(x)&&/^[\s(\-]*[\d.,]+[\s)]*(DB|CR|DR)?\s*$/i.test(x)&&!isNaN(num(x)));
+{const _d=day;day=function(v){const r=_d(v);if(r!=null)return r;const m=String(v??'').trim().match(/^(\d{1,2})[\/\-](\d{1,2})$/);return m?Math.round(Date.UTC(window._yr||new Date().getFullYear(),m[2]-1,+m[1])/864e5):null}}
+function pickBal(Rw,C){let best=-1,bs=.5;C.forEach(c=>{let h=0,t=0;Rw.forEach((r,i)=>{if(!i||!isNum(r[c])||!isNum(Rw[i-1][c]))return;const d=Math.abs(num(r[c])-num(Rw[i-1][c]));t++;if(d>0&&C.some(o=>o!==c&&[r[o],Rw[i-1][o]].some(y=>isNum(y)&&Math.abs(Math.abs(num(y))-d)<.011)))h++});if(t>3&&h/t>bs){bs=h/t;best=c}});return best}
+function infer(k){
+  const D=S[k],H=D.headers,Rw=D.rows.slice(0,300),g=f=>$(k+'_'+f),get=f=>+g(f).value,set=(f,j)=>{g(f).value=j};
+  const C0=H.map((_,j)=>{const v=Rw.map(r=>r[j]).filter(x=>String(x??'').trim()!=='');const L=v.length||1;return{j,dt:v.filter(dtv).length/L,nm:v.filter(isNum).length/L,tx:v.reduce((s,x)=>s+String(x).length,0)/L,dc:v.filter(x=>/^(db|cr|dr|d|k|c|debit|kredit|credit|debet)$/i.test(String(x).trim())).length/L,sh:v.every(x=>String(x).trim().length<=4)}});
+  const used=()=>FIELDS.map(([f])=>get(f));
+  if(get('date')<0){const b=C0.filter(c=>c.dt>=.5).sort((a,b)=>b.dt-a.dt)[0];if(b)set('date',b.j)}
+  if(get('dc')<0){const b=C0.find(c=>c.dc>=.6&&!used().includes(c.j));if(b)set('dc',b.j)}
+  if(get('desc')<0){const b=C0.filter(c=>c.dt<.5&&c.nm<.5&&c.dc<.6&&!used().includes(c.j)).sort((a,b)=>b.tx-a.tx)[0];if(b)set('desc',b.j)}
+  if(get('amt')<0&&get('deb')<0&&get('kre')<0){
+    const C=C0.filter(c=>c.nm>=.5&&c.dt<.5&&!c.sh&&![get('date'),get('desc'),get('dc')].includes(c.j)).map(c=>c.j);
+    if(get('bal')<0&&C.length>=2){const b=pickBal(Rw,C);if(b>=0)set('bal',b)}
+    const bl=get('bal'),M=C.filter(j=>j!==bl),ir=(k==='A'&&$('flipA').checked)?'deb':'kre';
+    const up=c=>{let u=0,t=0;Rw.forEach((r,i)=>{if(i&&bl>=0&&isNum(r[c])&&isNum(r[bl])&&isNum(Rw[i-1][bl])){t++;if(num(r[bl])>num(Rw[i-1][bl]))u++}});return t?u/t:.5};
+    if(M.length===1)set('amt',M[0]);
+    else if(M.length>=2){const a=M[0],b=M[1],inC=bl>=0?(up(a)>up(b)?a:b):(ir==='deb'?a:b),ou=inC===a?b:a;set(ir,inC);set(ir==='deb'?'kre':'deb',ou)}
+  }
+  D.sfb=get('amt')>=0&&get('dc')<0&&get('bal')>=0&&!Rw.some(r=>num(r[get('amt')])<0);
+}
+function clean(k){
+  const D=S[k],dj=+$(k+'_date').value,ej=+$(k+'_desc').value;if(dj<0)return;
+  const out=[];
+  D.rows.forEach(r=>{
+    if(day(r[dj])!=null){out.push(r);return}
+    const txt=r.filter(x=>String(x).trim()!=='').join(' ');
+    if(!txt||/saldo|total|jumlah|halaman|page/i.test(txt))return;
+    const hasNum=r.some((x,j)=>j!==ej&&j!==dj&&isNum(x)&&String(x).trim().length>3);
+    if(hasNum&&out.length){r[dj]=out[out.length-1][dj];out.push(r)}
+    else if(out.length&&ej>=0)out[out.length-1][ej]=(String(out[out.length-1][ej])+' '+txt).trim();
+  });
+  if(out.length)D.rows=out;
+}
+{const _s2=setData;setData=function(k,aoa,name,pre){
+  const ne=r=>r.filter(c=>String(c).trim()!=='');
+  let hi=-1,bs=1;aoa.slice(0,60).forEach((r,i)=>{if(ne(r).length<2||!r.some(x=>typeof x==='string'&&KEYS.date.test(x)))return;const sc=Object.keys(KEYS).filter(f=>r.some(x=>typeof x==='string'&&KEYS[f].test(x))).length;if(sc>bs){bs=sc;hi=i}});
+  let st=hi,a2;
+  if(hi>=0)a2=aoa.slice(hi);
+  else{st=Math.max(0,aoa.findIndex(r=>ne(r).length>=2&&r.some(dtv)));const d=aoa.slice(st);a2=[Array.from({length:Math.max(1,...d.slice(0,50).map(r=>r.length))},(_,i)=>'Kolom '+(i+1)),...d]}
+  const pr=pre||aoa.slice(0,st).map(r=>ne(r).join(' ')).filter(Boolean);
+  window._yr=(pr.join(' ').match(/20\d\d/)||[])[0];
+  _s2(k,a2,name,pr);
+  if(!S[k])return;
+  infer(k);clean(k);
+  $('n'+k).textContent=name+' ('+S[k].rows.length+' baris)';
+  $('m'+k).insertAdjacentHTML('beforeend','<div style="grid-column:1/-1;font-size:12px;color:var(--mut)">Kolom terdeteksi otomatis. Ubah jika kurang tepat.</div>');
+}}
+function extract(k){
+  const g=f=>{const e=$(k+'_'+f);return e?+e.value:-1},c={date:g('date'),desc:g('desc'),amt:g('amt'),deb:g('deb'),kre:g('kre'),bal:g('bal'),dc:g('dc')};
+  const fl=k==='A'&&$('flipA').checked,rows=S[k].rows,out=[];
+  const ds=c.date>=0?rows.map(r=>day(r[c.date])).filter(x=>x!=null):[],asc=!ds.length||ds[0]<=ds[ds.length-1];
+  rows.forEach((r,i)=>{
+    let amt=NaN;
+    if(c.amt>=0){amt=num(r[c.amt]);
+      if(!isNaN(amt)&&c.dc>=0){const t=String(r[c.dc]).trim();let s=/^(db|dr|d|debit|debet)$/i.test(t)?-1:/^(cr|c|k|kredit|credit)$/i.test(t)?1:0;if(fl)s=-s;if(s)amt=s*Math.abs(amt)}
+      else if(!isNaN(amt)&&S[k].sfb&&c.bal>=0){const p=rows[asc?i-1:i+1];if(p&&isNum(p[c.bal])&&isNum(r[c.bal]))amt=(num(r[c.bal])>=num(p[c.bal])?1:-1)*Math.abs(amt)}}
+    else if(c.deb>=0||c.kre>=0){const d=c.deb>=0?num(r[c.deb]):NaN,kr=c.kre>=0?num(r[c.kre]):NaN;
+      if(!(isNaN(d)&&isNaN(kr))){const dd=isNaN(d)?0:Math.abs(d),kk=isNaN(kr)?0:Math.abs(kr);amt=fl?dd-kk:kk-dd}}
+    if(isNaN(amt))return;
+    out.push({i,day:c.date>=0?day(r[c.date]):null,desc:c.desc>=0?String(r[c.desc]):'',amt,b:c.bal>=0?num(r[c.bal]):null});
+  });
+  return out;
+}
 </script>
 </body>
 </html>
