@@ -110,7 +110,7 @@ async function loadPdf(k,file){
       let cur=null;
       its.forEach(i=>{if(!cur||Math.abs(cur.y-i.y)>3){cur={y:i.y,p,its:[]};lines.push(cur)}cur.its.push(i)});
     }
-    const rows=lines.map(l=>{const c=[];l.its.sort((a,b)=>a.x-b.x).forEach(i=>{const t=c[c.length-1];if(t&&i.x-t.xr<6){t.s+=' '+i.s;t.xr=i.x+i.w}else c.push({s:i.s,xl:i.x,xr:i.x+i.w,y:i.y})});c.p=l.p;c.y=l.y;return c}).filter(c=>c.length);
+    const rows=lines.map(l=>{const c=[];l.its.sort((a,b)=>a.x-b.x).forEach(i=>{const t=c[c.length-1];if(t&&i.x-t.xr<6&&mny(t.s)===mny(i.s)){t.s+=' '+i.s;t.xr=i.x+i.w}else c.push({s:i.s,xl:i.x,xr:i.x+i.w,y:i.y})});c.p=l.p;c.y=l.y;return c}).filter(c=>c.length);
     if(!rows.length)throw new Error('PDF tidak berisi teks (kemungkinan hasil scan). Gunakan PDF asli dari sistem atau bank, atau file Excel.');
     const isHead=c=>Object.keys(KEYS).filter(f=>c.some(x=>KEYS[f].test(x.s))).length>=3;
     const dateRe=/\d{1,4}[-\/.]\d{1,2}[-\/.]\d{2,4}|\d{1,2}[ -][A-Za-z]{3,}[ -]\d{2,4}/;
@@ -118,7 +118,7 @@ async function loadPdf(k,file){
     let aoa;
     if(hi>=0){
       const H=rows[hi],n=H.length,out=[H.map(c=>c.s)];
-      const nc=j=>[KEYS.deb,KEYS.kre,KEYS.bal,KEYS.amt].some(r=>r.test(H[j].s)),mon=c=>{const t=c.s.trim().split(/\s+/);if(t.length<=2&&t.some(w=>/^\(?-?\d[\d.,]*\)?$/.test(w)&&/[.,]/.test(w)))return true;return /^\d+$/.test(c.s.trim())&&H.some((h,j)=>nc(j)&&Math.abs(c.xr-h.xr)<10)&&!H.some((h,j)=>!nc(j)&&Math.abs(c.xl-h.xl)<10)};
+      const nc=j=>[KEYS.deb,KEYS.kre,KEYS.bal,KEYS.amt].some(r=>r.test(H[j].s)),mon=c=>{const t=c.s.trim().split(/\s+/);if(t.length<=2&&t.some(mny))return true;return /^\d+$/.test(c.s.trim())&&H.some((h,j)=>nc(j)&&Math.abs(c.xr-h.xr)<10)&&!H.some((h,j)=>!nc(j)&&Math.abs(c.xl-h.xl)<10)};
       const near=c=>{const m=mon(c);let b=-1,bd=1e9;H.forEach((h,j)=>{if(nc(j)!==m)return;const d=m?Math.min(Math.abs(c.xr-h.xr),Math.abs((c.xl+c.xr)/2-(h.xl+h.xr)/2)):Math.abs(c.xl-h.xl);if(d<bd){bd=d;b=j}});if(b>=0)return b;H.forEach((h,j)=>{const d=Math.abs(c.xl-h.xl);if(d<bd){bd=d;b=j}});return b};
       const di=H.findIndex(h=>KEYS.desc.test(h.s));
       buildRecs(rows,hi,H,out,near,isHead,dateRe);
@@ -307,7 +307,7 @@ function drawDet(){
   const q=R;
   const one=(l,k)=>l.length?`<table><tr><th>Tanggal</th><th>Keterangan</th><th class='n'>Jumlah</th><th>Masuk laporan sebagai</th></tr>${l.map(x=>`<tr><td>${dstr(x.day)}</td><td>${esc(x.desc)}</td><td class='n'>${fmt(x.amt)}</td><td><select data-k='${k}${x.i}' onchange='setCat(this.dataset.k,this.value)'>${optHtml(q.cat[k+x.i])}</select></td></tr>`).join('')}</table>`:`<div class='empty'>Tidak ada transaksi di sini.</div>`;
   const mt=q.match.length?`<table><tr><th>Tgl A</th><th>Keterangan A</th><th class='n'>Jumlah A</th><th>Tgl B</th><th>Keterangan B</th><th class='n'>Jumlah B</th><th>Status</th></tr>${q.match.map(p=>`<tr><td>${dstr(p.a.day)}</td><td>${esc(p.a.desc)}</td><td class='n'>${fmt(p.a.amt)}</td><td>${dstr(p.b.day)}</td><td>${esc(p.b.desc)}</td><td class='n'>${fmt(p.b.amt)}</td><td><span class='tag ${p.dd===0?'t1':'t2'}'>${p.dd===0?'Tanggal sama':'Beda '+p.dd+' hari'}</span></td></tr>`).join('')}</table>`:`<div class='empty'>Belum ada transaksi yang cocok.</div>`;
-  $('det').innerHTML=`<h2>Rincian transaksi</h2><div class='tabs'>${[['m','Cocok ('+q.match.length+')'],['a','Hanya di A ('+q.oa.length+')'],['b','Hanya di B ('+q.ob.length+')']].map(([k,l])=>`<button class='${tab===k?'on':''}' data-t='${k}' onclick='tab=this.dataset.t;drawDet()'>${l}</button>`).join('')}</div><div class='card wrap'>${tab==='m'?mt:one(tab==='a'?q.oa:q.ob,tab==='a'?'A':'B')}</div>`}
+  $('det').innerHTML=`<h2>Rincian transaksi</h2><div class='tabs'>${[['m','Cocok ('+q.match.length+')'],['a','Hanya di A ('+q.oa.length+')'],['b','Hanya di B ('+q.ob.length+')'],['x','Data A ('+q.A.length+')'],['y','Data B ('+q.B.length+')']].map(([k,l])=>`<button class='${tab===k?'on':''}' data-t='${k}' onclick='tab=this.dataset.t;drawDet()'>${l}</button>`).join('')}</div><div class='card wrap'>${tab==='m'?mt:tab==='x'?allT(q.A):tab==='y'?allT(q.B):one(tab==='a'?q.oa:q.ob,tab==='a'?'A':'B')}</div>`}
 function render(){
   const q=R;
   if(!q.init){q.init=1;groupMatch(q);q.cat={};q.oa.forEach(x=>q.cat['A'+x.i]=guess('A',x));q.ob.forEach(x=>q.cat['B'+x.i]=guess('B',x));q.sA=lastBal(q.A)??'';q.sB=lastBal(q.B)??'';q.co=findCo();q.per=findPer()}
@@ -390,23 +390,40 @@ function extract(k){
 }
 function buildRecs(rows,hi,H,out,near,isHead,dateRe){
   const dc=H.findIndex(h=>KEYS.date.test(h.s)),n=H.length,hd=c=>isHead(c)&&c.some(x=>KEYS.date.test(x.s));
-  const junk=/further questions|help center|page \d+ of \d+|halaman \d+|^\s*(account statement|created\b|dicetak|total\b|jumlah\b|saldo (awal|akhir)|grand total)/i,byPage={};
+  const junk=/further questions|help center|page \d+ of \d+|halaman \d+|\bsaldo (awal|akhir)\b|^\s*(account statement|created\b|dicetak|total\b|jumlah\b|grand total)/i,byPage={};
   rows.forEach((c,i)=>{if(i<hi)return;(byPage[c.p]=byPage[c.p]||[]).push(c)});
   Object.keys(byPage).forEach(p=>{
     let L=byPage[p];const h=L.findIndex(hd);
     if(h>=0)L=L.slice(h+1);
     L=L.filter(c=>!junk.test(c.map(x=>x.s).join(' ')));
-    const di=[];L.forEach((c,i)=>{if(c.some(x=>near(x)===dc&&dateRe.test(x.s)))di.push(i)});
+    const nh=H.filter(h=>[KEYS.deb,KEYS.kre,KEYS.bal,KEYS.amt].some(r=>r.test(h.s)));
+    const expand=c=>{const w=c.s.trim().split(/\s+/);if(w.length<2)return [c];const Ln=c.s.length,W=c.xr-c.xl,o=[],rest=[];let pos=0;
+      w.forEach(t=>{const s0=c.s.indexOf(t,pos);pos=s0+t.length;const xr=c.xl+W*pos/Ln;
+        if(/^\(?-?\d[\d.,]*\)?$/.test(t)&&/[.,]/.test(t)&&nh.some(h=>Math.abs(xr-h.xr)<20))o.push({s:t,xl:c.xl+W*s0/Ln,xr,y:c.y});else rest.push(t)});
+      if(!o.length)return [c];return rest.length?[{s:rest.join(' '),xl:c.xl,xr:c.xr,y:c.y},...o]:o};
+    let di=[];L.forEach((c,i)=>{if(c.some(x=>near(x)===dc&&dateRe.test(x.s)))di.push(i)});
+    const dl=di.slice();let byBal=false;const bj=H.findIndex(h=>KEYS.bal.test(h.s));
+    if(bj>=0){const bi=[];L.forEach((c,i)=>{if(c.flatMap(expand).some(x=>/^\(?-?\d[\d.,]*\)?$/.test(x.s.trim())&&/[.,]/.test(x.s)&&near(x)===bj))bi.push(i)});if(bi.length>di.length){di=bi;byBal=true}}
     if(!di.length)return;
     const cut=[];
     for(let k=0;k<di.length-1;k++){let bj=di[k],bg=-1;for(let j=di[k];j<di[k+1];j++){const g=L[j].y-L[j+1].y;if(g>bg){bg=g;bj=j}}cut.push(bj)}
-    let s=0;
-    [...cut,L.length-1].forEach(e=>{const cs=H.map(()=>[]);L.slice(s,e+1).forEach(c=>c.forEach(x=>cs[near(x)].push(x)));
-      out.push(cs.map((a,j)=>{
+    const recs=[];let s=0;
+    [...cut,L.length-1].forEach(e=>{const cs=H.map(()=>[]);L.slice(s,e+1).forEach(c=>c.flatMap(expand).filter(x=>!/^(rp|idr)\.?$/i.test(x.s.trim())).forEach(x=>cs[near(x)].push(x)));
+      recs.push(cs.map((a,j)=>{
         if(![KEYS.deb,KEYS.kre,KEYS.bal,KEYS.amt].some(r=>r.test(H[j].s)))return a.map(x=>x.s).join(' ').trim();
         const t=a.flatMap(x=>x.s.split(/\s+/).map(w=>({w,xr:x.xr}))).filter(o=>/^\(?-?\d[\d.,]*\)?$/.test(o.w)&&/[.,]/.test(o.w));
         const t2=t.filter(o=>/[.,]/.test(o.w)),b=(t2.length?t2:t).reduce((m,o)=>!m||Math.abs(o.xr-H[j].xr)<=Math.abs(m.xr-H[j].xr)?o:m,null);
         return b?b.w+(/\b(DB|DR)\b/.test(a.map(x=>x.s).join(' '))?' DB':''):''}));s=e+1});
+    if(byBal&&dl.length&&dl.length<=recs.length){
+      const R=recs.length,M=dl.length,ry=di.map(i=>L[i].y),dy=dl.map(i=>L[i].y);
+      const dtx=dl.map(i=>{const c=L[i].find(x=>near(x)===dc&&dateRe.test(x.s));return c?c.s:''});
+      const cost=(k,a,b)=>{let m=0;for(let i=a;i<=b;i++)m+=ry[i];return Math.abs(dy[k]-m/(b-a+1))};
+      const INF=1e12,f=Array.from({length:M+1},()=>Array(R+1).fill(INF)),g=Array.from({length:M+1},()=>Array(R+1).fill(0));
+      f[0][0]=0;
+      for(let k=1;k<=M;k++)for(let i=k;i<=R;i++)for(let j=k-1;j<i;j++){if(f[k-1][j]>=INF)continue;const v=f[k-1][j]+cost(k-1,j,i-1);if(v<f[k][i]){f[k][i]=v;g[k][i]=j}}
+      let i=R;for(let k=M;k>=1;k--){const j=g[k][i];for(let t=j;t<i;t++)recs[t][dc]=dtx[k-1];i=j}
+    }
+    recs.forEach(r=>out.push(r));
   });
 }
 function pdfPre(rows,h){
@@ -417,6 +434,8 @@ function pdfPre(rows,h){
     if(v)o.push(x.s+': '+v.s)}));
   return o}
 function withEnt(n,f){const t=String(f||'').replace(/\.[a-z]+$/i,'').replace(/[_.\-]+/g,' ').toUpperCase(),i=t.indexOf(n.toUpperCase());if(i>0){const w=t.slice(0,i).trim().split(/\s+/).pop();if(/^(PT|CV|UD|PD)$/.test(w))return w+' '+n}return n}
+const mny=s=>/^\(?-?(?:\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|\d+[.,]\d{1,2})\)?$/.test(s);
+function allT(l){return l.length?`<table><tr><th>Tanggal</th><th>Keterangan</th><th class='n'>Jumlah</th><th class='n'>Saldo</th></tr>${l.map(x=>`<tr><td>${dstr(x.day)}</td><td>${esc(x.desc)}</td><td class='n'>${fmt(x.amt)}</td><td class='n'>${x.b!=null&&!isNaN(x.b)?fmt(x.b):''}</td></tr>`).join('')}</table>`:`<div class='empty'>Tidak ada data.</div>`}
 function groupMatch(q){
   const tol=(+$('tol').value||0)+.005,dt=Math.max(+$('dt').value||0,10),ab=$('abs').checked,v=x=>Math.abs(x.amt);
   const ok=(a,b)=>a.day==null||b.day==null||Math.abs(a.day-b.day)<=dt;
