@@ -164,7 +164,7 @@ function setData(k,aoa,name){
   const am=$(k+'_amt');if(+am.value>=0){$(k+'_deb').value=-1;$(k+'_kre').value=-1}
 }
 ['A','B'].forEach(k=>{
-  $('f'+k).onchange=e=>e.target.files[0]&&load(k,e.target.files[0]);
+  $('f'+k).onchange=e=>{const f=e.target.files[0];if(f)load(k,f);e.target.value=''};
   const d=$('d'+k);
   d.ondragover=e=>{e.preventDefault();d.classList.add('on')};
   d.ondrop=e=>{e.preventDefault();e.dataTransfer.files[0]&&load(k,e.dataTransfer.files[0])};
@@ -301,7 +301,7 @@ function drawRep(){
   const q=R,T=tots(),oa=(+q.sA||0)-q.A.reduce((s,x)=>s+x.amt,0),ob=(+q.sB||0)-q.B.reduce((s,x)=>s+x.amt,0),L=side('Saldo menurut Pembukuan Perusahaan',+q.sA||0,CT.P,T),B=side('Saldo menurut Pembukuan Bank',+q.sB||0,CT.B,T),diff=Math.round((L.fin-B.fin)*100)/100,ok=diff===0;
   const miss=(q.sA===''||q.sB==='')?`<p class='sub' style='margin:0 0 12px'>Kolom saldo belum terbaca. Isi saldo akhir secara manual pada kolom Data laporan.</p>`:'';
   const sf=l=>l.length+' transaksi (masuk Rp '+fmt(l.filter(x=>x.amt>0).reduce((s,x)=>s+x.amt,0))+', keluar Rp '+fmt(-l.filter(x=>x.amt<0).reduce((s,x)=>s+x.amt,0))+')';
-  $('rep').innerHTML=`${miss}<p class='sub' style='margin:0 0 12px'>Terbaca: Sumber A ${sf(q.A)}; Sumber B ${sf(q.B)}.</p><div class='banner ${ok?'ok':'bad'}'>${ok?'Seimbang: saldo setelah rekonsiliasi pembukuan dan bank sama.':'Belum seimbang: selisih Rp '+fmt(Math.abs(diff))+'. '+(Math.abs(oa-ob)>.005?'Saldo awal yang tersirat dari data berbeda (pembukuan Rp '+fmt(oa)+', bank Rp '+fmt(ob)+'), kemungkinan ada transaksi yang belum tercatat di salah satu sumber atau salah terbaca.':'Periksa klasifikasi transaksi.')}</div><div class='rpt'><div class='rh'>${esc(q.co)||'(isi nama perusahaan)'}<br>Rekonsiliasi Kas &amp; Bank<br>Periode ${esc(q.per)}</div><div class='rg'><div>${L.html}</div><div>${B.html}</div></div></div>`}
+  $('rep').innerHTML=`${miss}<p class='sub' style='margin:0 0 12px'>Terbaca: Sumber A ${sf(q.A)}; Sumber B ${sf(q.B)}.</p>${[['A',q.A],['B',q.B]].map(([k,l])=>{const s=l.filter(x=>x.syn);return s.length?`<p class='sub' style='margin:0 0 12px;color:var(--warn)'>Perhatian: ${s.length} transaksi Sumber ${k} tidak terbaca langsung dari file dan dihitung dari selisih saldo (total Rp ${fmt(s.reduce((t,x)=>t+Math.abs(x.amt),0))}). Periksa file sumber di sekitar transaksi bertanda [dibaca dari selisih saldo].</p>`:''}).join('')}<div class='banner ${ok?'ok':'bad'}'>${ok?'Seimbang: saldo setelah rekonsiliasi pembukuan dan bank sama.':'Belum seimbang: selisih Rp '+fmt(Math.abs(diff))+'. '+(Math.abs(oa-ob)>.005?'Saldo awal yang tersirat dari data berbeda (pembukuan Rp '+fmt(oa)+', bank Rp '+fmt(ob)+'), kemungkinan ada transaksi yang belum tercatat di salah satu sumber atau salah terbaca.':'Periksa klasifikasi transaksi.')}</div><div class='rpt'><div class='rh'>${esc(q.co)||'(isi nama perusahaan)'}<br>Rekonsiliasi Kas &amp; Bank<br>Periode ${esc(q.per)}</div><div class='rg'><div>${L.html}</div><div>${B.html}</div></div></div>`}
 function setCat(key,v){R.cat[key]=v;drawRep()}
 function drawDet(){
   const q=R;
@@ -386,7 +386,7 @@ function extract(k){
     if(isNaN(amt))return;
     out.push({i,day:c.date>=0?day(r[c.date]):null,desc:c.desc>=0?String(r[c.desc]):'',amt,b:c.bal>=0?num(r[c.bal]):null});
   });
-  return out;
+  return chainFix(out);
 }
 function buildRecs(rows,hi,H,out,near,isHead,dateRe){
   const dc=H.findIndex(h=>KEYS.date.test(h.s)),n=H.length,hd=c=>isHead(c)&&c.some(x=>KEYS.date.test(x.s));
@@ -433,8 +433,28 @@ function pdfPre(rows,h){
     const v=p[i+1].reduce((b,y)=>!b||Math.abs(y.xl-x.xl)<Math.abs(b.xl-x.xl)?y:b,null);
     if(v)o.push(x.s+': '+v.s)}));
   return o}
-function withEnt(n,f){const t=String(f||'').replace(/\.[a-z]+$/i,'').replace(/[_.\-]+/g,' ').toUpperCase(),i=t.indexOf(n.toUpperCase());if(i>0){const w=t.slice(0,i).trim().split(/\s+/).pop();if(/^(PT|CV|UD|PD)$/.test(w))return w+' '+n}return n}
+function withEnt(n,f){const t=String(f||'').replace(/\.[a-z]+$/i,'').replace(/[_.\-]+/g,' ').toUpperCase(),i=t.indexOf(n.toUpperCase());if(i<0)return n;let e=i+n.length;while(e<t.length&&t[e]!==' ')e++;const w=t.slice(0,i).trim().split(/\s+/).pop();return (/^(PT|CV|UD|PD)$/.test(w)?w+' ':'')+t.slice(i,e)}
 const mny=s=>/^\(?-?(?:\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|\d+[.,]\d{1,2})\)?$/.test(s);
+function chainFix(o){
+  const ok=x=>x.b!=null&&!isNaN(x.b),n=o.length;
+  if(n<4||o.filter(ok).length<n*.8)return o;
+  let cF=0,cR=0;
+  for(let i=1;i<n;i++)if(ok(o[i])&&ok(o[i-1])&&Math.abs(o[i].b-o[i-1].b-o[i].amt)<.01)cF++;
+  for(let i=0;i<n-1;i++)if(ok(o[i])&&ok(o[i+1])&&Math.abs(o[i].b-o[i+1].b-o[i].amt)<.01)cR++;
+  const fw=cF>=cR;if(Math.max(cF,cR)<(n-1)*.6)return o;
+  const res=[];let k=0;
+  o.forEach((x,i)=>{
+    const j=fw?i-1:i+1;
+    if(j>=0&&j<n&&ok(x)&&ok(o[j])){
+      const g=Math.round((x.b-o[j].b-x.amt)*100)/100;
+      if(Math.abs(g)>=.01){
+        if(Math.abs(g+2*x.amt)<.01)x.amt=-x.amt;
+        else res.push({i:1e6+(k++),day:x.day,desc:'[dibaca dari selisih saldo] dekat: '+x.desc.slice(0,40),amt:g,b:null,syn:true});
+      }
+    }
+    res.push(x)});
+  return res}
+{const _l=load;load=function(k,f){S[k]=null;$('out').innerHTML='';$('n'+k).textContent='Membaca '+f.name+' ...';_l(k,f)}}
 function allT(l){return l.length?`<table><tr><th>Tanggal</th><th>Keterangan</th><th class='n'>Jumlah</th><th class='n'>Saldo</th></tr>${l.map(x=>`<tr><td>${dstr(x.day)}</td><td>${esc(x.desc)}</td><td class='n'>${fmt(x.amt)}</td><td class='n'>${x.b!=null&&!isNaN(x.b)?fmt(x.b):''}</td></tr>`).join('')}</table>`:`<div class='empty'>Tidak ada data.</div>`}
 function groupMatch(q){
   const tol=(+$('tol').value||0)+.005,dt=Math.max(+$('dt').value||0,10),ab=$('abs').checked,v=x=>Math.abs(x.amt);
