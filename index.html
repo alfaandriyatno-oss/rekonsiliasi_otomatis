@@ -107,9 +107,9 @@ async function loadPdf(k,file){
       const its=tc.items.filter(i=>i.str.trim()).map(i=>({s:i.str.trim(),x:i.transform[4],y:i.transform[5],w:i.width}));
       its.sort((a,b)=>b.y-a.y);
       let cur=null;
-      its.forEach(i=>{if(!cur||Math.abs(cur.y-i.y)>3){cur={y:i.y,its:[]};lines.push(cur)}cur.its.push(i)});
+      its.forEach(i=>{if(!cur||Math.abs(cur.y-i.y)>3){cur={y:i.y,p,its:[]};lines.push(cur)}cur.its.push(i)});
     }
-    const rows=lines.map(l=>{const c=[];l.its.sort((a,b)=>a.x-b.x).forEach(i=>{const t=c[c.length-1];if(t&&i.x-t.xr<6){t.s+=' '+i.s;t.xr=i.x+i.w}else c.push({s:i.s,xl:i.x,xr:i.x+i.w})});return c}).filter(c=>c.length);
+    const rows=lines.map(l=>{const c=[];l.its.sort((a,b)=>a.x-b.x).forEach(i=>{const t=c[c.length-1];if(t&&i.x-t.xr<6){t.s+=' '+i.s;t.xr=i.x+i.w}else c.push({s:i.s,xl:i.x,xr:i.x+i.w,y:i.y})});c.p=l.p;c.y=l.y;return c}).filter(c=>c.length);
     if(!rows.length)throw new Error('PDF tidak berisi teks (kemungkinan hasil scan). Gunakan PDF asli dari sistem atau bank, atau file Excel.');
     const isHead=c=>Object.keys(KEYS).filter(f=>c.some(x=>KEYS[f].test(x.s))).length>=3;
     const dateRe=/\d{1,4}[-\/.]\d{1,2}[-\/.]\d{2,4}|\d{1,2}[ -][A-Za-z]{3,}[ -]\d{2,4}/;
@@ -119,7 +119,8 @@ async function loadPdf(k,file){
       const H=rows[hi],n=H.length,out=[H.map(c=>c.s)];
       const near=c=>{let b=0,bd=1e9;H.forEach((h,j)=>{const d=Math.min(Math.abs(c.xl-h.xl),Math.abs(c.xr-h.xr),Math.abs((c.xl+c.xr)/2-(h.xl+h.xr)/2));if(d<bd){bd=d;b=j}});return b};
       const di=H.findIndex(h=>KEYS.desc.test(h.s));
-      rows.slice(hi+1).forEach(c=>{
+      buildRecs(rows,hi,H,out,near,isHead,dateRe);
+      [].forEach(c=>{
         if(isHead(c))return;
         if(c.some(x=>dateRe.test(x.s))){const r=Array(n).fill('');c.forEach(x=>{const j=near(x);r[j]=(r[j]+' '+x.s).trim()});out.push(r)}
         else if(out.length>1&&di>=0&&c.every(x=>near(x)===di)){out[out.length-1][di]+=' '+c.map(x=>x.s).join(' ')}
@@ -136,7 +137,7 @@ async function loadPdf(k,file){
       aoa=[['Tanggal','Keterangan',...Array.from({length:W},(_,i)=>'Angka '+(i+1))],...P.map(r=>{const q=r.slice(2);return [r[0],r[1],...Array(W-q.length).fill(''),...q]})];
     }
     if(aoa.length<2)throw new Error('Baris transaksi tidak ditemukan pada PDF.');
-    setData(k,aoa,file.name,rows.slice(0,hi>=0?hi:5).map(c=>c.map(x=>x.s).join(' ')));
+    setData(k,aoa,file.name,pdfPre(rows,hi>=0?hi:5));
   }catch(err){alert('PDF tidak bisa dibaca: '+err.message)}
 }
 function load(k,file){
@@ -278,7 +279,7 @@ function guess(k,x){const t=x.desc.toLowerCase(),p=x.amt>0;
   return p?'setkecil':'ambilkecil'}
 function findCo(){
   for(const k of ['B','A']){const pre=(S[k]&&S[k].pre)||[];
-    for(const t of pre){const m=t.match(/(?:nama(?:\s+(?:rekening|nasabah|perusahaan))?|account\s*name|name)\s*[:\-]\s*(.+)/i);if(m&&m[1].trim().length>2)return m[1].trim()}
+    for(const t of pre){const m=t.match(/(?:nama(?:\s+(?:rekening|nasabah|perusahaan))?|account\s*name|name)\s*[:\-]\s*(.+)/i);if(m&&m[1].trim().length>2)return withEnt(m[1].trim(),S[k].fname)}
     const e=pre.find(t=>/(^|\s)(PT|CV|UD|PD|Koperasi|Yayasan|Firma)\b\.?/i.test(t));if(e)return e.trim()}
   return ''}
 const BLN=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
@@ -362,6 +363,7 @@ function clean(k){
   window._yr=(pr.join(' ').match(/20\d\d/)||[])[0];
   _s2(k,a2,name,pr);
   if(!S[k])return;
+  S[k].fname=name;
   infer(k);clean(k);
   $('n'+k).textContent=name+' ('+S[k].rows.length+' baris)';
   $('m'+k).insertAdjacentHTML('beforeend','<div style="grid-column:1/-1;font-size:12px;color:var(--mut)">Kolom terdeteksi otomatis. Ubah jika kurang tepat.</div>');
@@ -383,6 +385,30 @@ function extract(k){
   });
   return out;
 }
+function buildRecs(rows,hi,H,out,near,isHead,dateRe){
+  const dc=H.findIndex(h=>KEYS.date.test(h.s)),n=H.length,hd=c=>isHead(c)&&c.some(x=>KEYS.date.test(x.s));
+  const junk=/further questions|help center|page \d+ of \d+|halaman \d+|^\s*(account statement|created\b|dicetak|total\b|jumlah\b|saldo (awal|akhir)|grand total)/i,byPage={};
+  rows.forEach((c,i)=>{if(i<hi)return;(byPage[c.p]=byPage[c.p]||[]).push(c)});
+  Object.keys(byPage).forEach(p=>{
+    let L=byPage[p];const h=L.findIndex(hd);
+    if(h>=0)L=L.slice(h+1);
+    L=L.filter(c=>!junk.test(c.map(x=>x.s).join(' ')));
+    const di=[];L.forEach((c,i)=>{if(c.some(x=>near(x)===dc&&dateRe.test(x.s)))di.push(i)});
+    if(!di.length)return;
+    const cut=[];
+    for(let k=0;k<di.length-1;k++){let bj=di[k],bg=-1;for(let j=di[k];j<di[k+1];j++){const g=L[j].y-L[j+1].y;if(g>bg){bg=g;bj=j}}cut.push(bj)}
+    let s=0;
+    [...cut,L.length-1].forEach(e=>{const r=Array(n).fill('');L.slice(s,e+1).forEach(c=>c.forEach(x=>{const j=near(x);r[j]=(r[j]+' '+x.s).trim()}));out.push(r);s=e+1});
+  });
+}
+function pdfPre(rows,h){
+  const p=rows.slice(0,h),o=p.map(c=>c.map(x=>x.s).join(' '));
+  p.forEach((c,i)=>c.forEach(x=>{
+    if(!/^(account name|nama rekening|nama nasabah|nama)$/i.test(x.s)||!p[i+1])return;
+    const v=p[i+1].reduce((b,y)=>!b||Math.abs(y.xl-x.xl)<Math.abs(b.xl-x.xl)?y:b,null);
+    if(v)o.push(x.s+': '+v.s)}));
+  return o}
+function withEnt(n,f){const t=String(f||'').replace(/\.[a-z]+$/i,'').replace(/[_.\-]+/g,' ').toUpperCase(),i=t.indexOf(n.toUpperCase());if(i>0){const w=t.slice(0,i).trim().split(/\s+/).pop();if(/^(PT|CV|UD|PD)$/.test(w))return w+' '+n}return n}
 </script>
 </body>
 </html>
