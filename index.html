@@ -398,7 +398,12 @@ function buildRecs(rows,hi,H,out,near,isHead,dateRe){
     const cut=[];
     for(let k=0;k<di.length-1;k++){let bj=di[k],bg=-1;for(let j=di[k];j<di[k+1];j++){const g=L[j].y-L[j+1].y;if(g>bg){bg=g;bj=j}}cut.push(bj)}
     let s=0;
-    [...cut,L.length-1].forEach(e=>{const r=Array(n).fill('');L.slice(s,e+1).forEach(c=>c.forEach(x=>{const j=near(x);r[j]=(r[j]+' '+x.s).trim()}));out.push(r);s=e+1});
+    [...cut,L.length-1].forEach(e=>{const cs=H.map(()=>[]);L.slice(s,e+1).forEach(c=>c.forEach(x=>cs[near(x)].push(x)));
+      out.push(cs.map((a,j)=>{
+        if(![KEYS.deb,KEYS.kre,KEYS.bal,KEYS.amt].some(r=>r.test(H[j].s)))return a.map(x=>x.s).join(' ').trim();
+        const t=a.flatMap(x=>x.s.split(/\s+/).map(w=>({w,xr:x.xr}))).filter(o=>/^\(?-?\d[\d.,]*\)?$/.test(o.w)&&/[.,]/.test(o.w));
+        const b=t.reduce((m,o)=>!m||Math.abs(o.xr-H[j].xr)<=Math.abs(m.xr-H[j].xr)?o:m,null);
+        return b?b.w+(/\b(DB|DR)\b/.test(a.map(x=>x.s).join(' '))?' DB':''):''}));s=e+1});
   });
 }
 function pdfPre(rows,h){
