@@ -274,8 +274,8 @@ function guess(k,x){const t=x.desc.toLowerCase(),p=x.amt>0;
   if(k==='A')return p?'sdp':'cek';
   if(/bunga|jasa giro|interest/.test(t))return 'jg';
   if(/tagih|inkaso|kliring|collection/.test(t))return 'tagih';
-  if(/cek kosong|tolak|nsf|dishonou?r|tidak cukup|insufficient/.test(t))return 'nsf';
-  if(/admin|biaya|provisi|pajak|materai|fee|charge/.test(t))return 'adm';
+  if(/cek kosong|\btolak|\bnsf\b|dishonou?r|tidak cukup|insufficient/.test(t))return 'nsf';
+  if(/admin|\badm\b|biaya|provisi|pajak|materai|charge/.test(t))return 'adm';
   return p?'setkecil':'ambilkecil'}
 function findCo(){
   for(const k of ['B','A']){const pre=(S[k]&&S[k].pre)||[];
@@ -296,9 +296,9 @@ function side(t,sal,S2,T){
   const li=l=>l.map(([c,n])=>`<tr class='i1'><td>${n}</td><td>${M(T[c]||0)}</td><td></td></tr>`).join('');
   return {fin,html:`<table class='rt'><tr class='b'><td>${t}</td><td></td><td>${M(sal)}</td></tr><tr><td>Ditambah:</td><td></td><td></td></tr>${li(S2.add)}<tr class='i2 ln'><td>Subtotal</td><td></td><td>${M(a)}</td></tr><tr class='i2'><td>Penjumlahan</td><td></td><td>${M(sal+a)}</td></tr><tr><td>Dikurangi:</td><td></td><td></td></tr>${li(S2.sub)}<tr class='i2 ln'><td>Subtotal</td><td></td><td>${M(d)}</td></tr><tr class='b ln'><td>Saldo setelah rekonsiliasi</td><td></td><td>${M(fin)}</td></tr></table>`}}
 function drawRep(){
-  const q=R,T=tots(),L=side('Saldo menurut Pembukuan Perusahaan',+q.sA||0,CT.P,T),B=side('Saldo menurut Pembukuan Bank',+q.sB||0,CT.B,T),diff=Math.round((L.fin-B.fin)*100)/100,ok=diff===0;
+  const q=R,T=tots(),oa=(+q.sA||0)-q.A.reduce((s,x)=>s+x.amt,0),ob=(+q.sB||0)-q.B.reduce((s,x)=>s+x.amt,0),L=side('Saldo menurut Pembukuan Perusahaan',+q.sA||0,CT.P,T),B=side('Saldo menurut Pembukuan Bank',+q.sB||0,CT.B,T),diff=Math.round((L.fin-B.fin)*100)/100,ok=diff===0;
   const miss=(q.sA===''||q.sB==='')?`<p class='sub' style='margin:0 0 12px'>Kolom saldo belum terbaca. Isi saldo akhir secara manual pada kolom Data laporan.</p>`:'';
-  $('rep').innerHTML=`${miss}<div class='banner ${ok?'ok':'bad'}'>${ok?'Seimbang: saldo setelah rekonsiliasi pembukuan dan bank sama.':'Belum seimbang: selisih Rp '+fmt(Math.abs(diff))+'. Periksa saldo akhir dan klasifikasi transaksi.'}</div><div class='rpt'><div class='rh'>${esc(q.co)||'(isi nama perusahaan)'}<br>Rekonsiliasi Kas &amp; Bank<br>Periode ${esc(q.per)}</div><div class='rg'><div>${L.html}</div><div>${B.html}</div></div></div>`}
+  $('rep').innerHTML=`${miss}<div class='banner ${ok?'ok':'bad'}'>${ok?'Seimbang: saldo setelah rekonsiliasi pembukuan dan bank sama.':'Belum seimbang: selisih Rp '+fmt(Math.abs(diff))+'. '+(Math.abs(oa-ob)>.005?'Saldo awal yang tersirat dari data berbeda (pembukuan Rp '+fmt(oa)+', bank Rp '+fmt(ob)+'), kemungkinan ada transaksi yang belum tercatat di salah satu sumber atau salah terbaca.':'Periksa klasifikasi transaksi.')}</div><div class='rpt'><div class='rh'>${esc(q.co)||'(isi nama perusahaan)'}<br>Rekonsiliasi Kas &amp; Bank<br>Periode ${esc(q.per)}</div><div class='rg'><div>${L.html}</div><div>${B.html}</div></div></div>`}
 function setCat(key,v){R.cat[key]=v;drawRep()}
 function drawDet(){
   const q=R;
@@ -307,7 +307,7 @@ function drawDet(){
   $('det').innerHTML=`<h2>Rincian transaksi</h2><div class='tabs'>${[['m','Cocok ('+q.match.length+')'],['a','Hanya di A ('+q.oa.length+')'],['b','Hanya di B ('+q.ob.length+')']].map(([k,l])=>`<button class='${tab===k?'on':''}' data-t='${k}' onclick='tab=this.dataset.t;drawDet()'>${l}</button>`).join('')}</div><div class='card wrap'>${tab==='m'?mt:one(tab==='a'?q.oa:q.ob,tab==='a'?'A':'B')}</div>`}
 function render(){
   const q=R;
-  if(!q.init){q.init=1;q.cat={};q.oa.forEach(x=>q.cat['A'+x.i]=guess('A',x));q.ob.forEach(x=>q.cat['B'+x.i]=guess('B',x));q.sA=lastBal(q.A)??'';q.sB=lastBal(q.B)??'';q.co=findCo();q.per=findPer()}
+  if(!q.init){q.init=1;groupMatch(q);q.cat={};q.oa.forEach(x=>q.cat['A'+x.i]=guess('A',x));q.ob.forEach(x=>q.cat['B'+x.i]=guess('B',x));q.sA=lastBal(q.A)??'';q.sB=lastBal(q.B)??'';q.co=findCo();q.per=findPer()}
   $('out').innerHTML=`<div class='card'><h2>Data laporan</h2><div class='set'><div style='flex:1;min-width:220px'><label for='co'>Nama perusahaan</label><input type='text' id='co'></div><div style='min-width:180px'><label for='per'>Periode</label><input type='text' id='per'></div><div><label for='sA'>Saldo akhir pembukuan (A)</label><input type='number' id='sA' step='any' style='width:170px'></div><div><label for='sB'>Saldo akhir bank (B)</label><input type='number' id='sB' step='any' style='width:170px'></div></div></div><div id='rep'></div><div id='det'></div>`;
   ['co','per','sA','sB'].forEach(id=>{const e=$(id);e.value=q[id];e.oninput=()=>{q[id]=e.type==='number'?(e.value===''?'':+e.value):e.value;drawRep()}});
   drawRep();drawDet();
@@ -409,6 +409,30 @@ function pdfPre(rows,h){
     if(v)o.push(x.s+': '+v.s)}));
   return o}
 function withEnt(n,f){const t=String(f||'').replace(/\.[a-z]+$/i,'').replace(/[_.\-]+/g,' ').toUpperCase(),i=t.indexOf(n.toUpperCase());if(i>0){const w=t.slice(0,i).trim().split(/\s+/).pop();if(/^(PT|CV|UD|PD)$/.test(w))return w+' '+n}return n}
+function groupMatch(q){
+  const tol=(+$('tol').value||0)+.005,dt=Math.max(+$('dt').value||0,10),ab=$('abs').checked,v=x=>Math.abs(x.amt);
+  const ok=(a,b)=>a.day==null||b.day==null||Math.abs(a.day-b.day)<=dt;
+  const find=(x,pool)=>{
+    for(const s of ab?[1,-1]:[Math.sign(x.amt)]){
+      const P=pool.filter(y=>ok(x,y)&&Math.sign(y.amt)===s&&v(y)<=v(x)+tol).sort((a,b)=>Math.abs((a.day||0)-(x.day||0))-Math.abs((b.day||0)-(x.day||0))).slice(0,20);
+      let r=null;
+      const go=(i,sel,sum)=>{if(r||sel.length>4)return;if(sel.length>=2&&Math.abs(sum-v(x))<=tol){r=sel.slice();return}
+        for(let j=i;j<P.length&&!r;j++){if(sum+v(P[j])>v(x)+tol)continue;sel.push(P[j]);go(j+1,sel,sum+v(P[j]));sel.pop()}};
+      go(0,[],0);if(r)return r}
+    return null};
+  const mk=l=>{const d=l.map(x=>x.day).filter(x=>x!=null);return {i:-1,day:d.length?Math.min(...d):null,desc:'['+l.length+' transaksi] '+l.map(x=>x.desc).join(' + '),amt:l.reduce((s,x)=>s+x.amt,0)}};
+  let ch=true;
+  while(ch){ch=false;
+    for(const [xs,ys,side] of [[q.ob,q.oa,'b'],[q.oa,q.ob,'a']]){
+      for(const x of xs.slice().sort((a,b)=>v(b)-v(a))){
+        const g=find(x,ys);if(!g)continue;
+        const m=mk(g),dd=(x.day!=null&&m.day!=null)?Math.abs(x.day-m.day):0;
+        q.match.push(side==='b'?{a:m,b:x,dd,s:0}:{a:x,b:m,dd,s:0});
+        xs.splice(xs.indexOf(x),1);g.forEach(y=>ys.splice(ys.indexOf(y),1));ch=true;break}
+      if(ch)break}
+  }
+  q.match.sort((x,y)=>(x.a.day||0)-(y.a.day||0));
+}
 </script>
 </body>
 </html>
