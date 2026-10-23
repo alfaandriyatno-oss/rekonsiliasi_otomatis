@@ -61,6 +61,7 @@ input[type=text]{padding:6px 8px;border:1px solid var(--line);border-radius:6px;
 .rp{display:flex;justify-content:space-between;gap:10px;font-variant-numeric:tabular-nums;white-space:nowrap}.rp i{font-style:normal}
 td select{min-width:230px}
 .map,#go{display:none}
+.wrap td:first-child{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -117,7 +118,8 @@ async function loadPdf(k,file){
     let aoa;
     if(hi>=0){
       const H=rows[hi],n=H.length,out=[H.map(c=>c.s)];
-      const near=c=>{let b=0,bd=1e9;H.forEach((h,j)=>{const d=Math.min(Math.abs(c.xl-h.xl),Math.abs(c.xr-h.xr),Math.abs((c.xl+c.xr)/2-(h.xl+h.xr)/2));if(d<bd){bd=d;b=j}});return b};
+      const nc=j=>[KEYS.deb,KEYS.kre,KEYS.bal,KEYS.amt].some(r=>r.test(H[j].s)),mon=c=>{const t=c.s.trim().split(/\s+/);if(t.length<=2&&t.some(w=>/^\(?-?\d[\d.,]*\)?$/.test(w)&&/[.,]/.test(w)))return true;return /^\d+$/.test(c.s.trim())&&H.some((h,j)=>nc(j)&&Math.abs(c.xr-h.xr)<10)&&!H.some((h,j)=>!nc(j)&&Math.abs(c.xl-h.xl)<10)};
+      const near=c=>{const m=mon(c);let b=-1,bd=1e9;H.forEach((h,j)=>{if(nc(j)!==m)return;const d=m?Math.min(Math.abs(c.xr-h.xr),Math.abs((c.xl+c.xr)/2-(h.xl+h.xr)/2)):Math.abs(c.xl-h.xl);if(d<bd){bd=d;b=j}});if(b>=0)return b;H.forEach((h,j)=>{const d=Math.abs(c.xl-h.xl);if(d<bd){bd=d;b=j}});return b};
       const di=H.findIndex(h=>KEYS.desc.test(h.s));
       buildRecs(rows,hi,H,out,near,isHead,dateRe);
       [].forEach(c=>{
@@ -298,7 +300,8 @@ function side(t,sal,S2,T){
 function drawRep(){
   const q=R,T=tots(),oa=(+q.sA||0)-q.A.reduce((s,x)=>s+x.amt,0),ob=(+q.sB||0)-q.B.reduce((s,x)=>s+x.amt,0),L=side('Saldo menurut Pembukuan Perusahaan',+q.sA||0,CT.P,T),B=side('Saldo menurut Pembukuan Bank',+q.sB||0,CT.B,T),diff=Math.round((L.fin-B.fin)*100)/100,ok=diff===0;
   const miss=(q.sA===''||q.sB==='')?`<p class='sub' style='margin:0 0 12px'>Kolom saldo belum terbaca. Isi saldo akhir secara manual pada kolom Data laporan.</p>`:'';
-  $('rep').innerHTML=`${miss}<div class='banner ${ok?'ok':'bad'}'>${ok?'Seimbang: saldo setelah rekonsiliasi pembukuan dan bank sama.':'Belum seimbang: selisih Rp '+fmt(Math.abs(diff))+'. '+(Math.abs(oa-ob)>.005?'Saldo awal yang tersirat dari data berbeda (pembukuan Rp '+fmt(oa)+', bank Rp '+fmt(ob)+'), kemungkinan ada transaksi yang belum tercatat di salah satu sumber atau salah terbaca.':'Periksa klasifikasi transaksi.')}</div><div class='rpt'><div class='rh'>${esc(q.co)||'(isi nama perusahaan)'}<br>Rekonsiliasi Kas &amp; Bank<br>Periode ${esc(q.per)}</div><div class='rg'><div>${L.html}</div><div>${B.html}</div></div></div>`}
+  const sf=l=>l.length+' transaksi (masuk Rp '+fmt(l.filter(x=>x.amt>0).reduce((s,x)=>s+x.amt,0))+', keluar Rp '+fmt(-l.filter(x=>x.amt<0).reduce((s,x)=>s+x.amt,0))+')';
+  $('rep').innerHTML=`${miss}<p class='sub' style='margin:0 0 12px'>Terbaca: Sumber A ${sf(q.A)}; Sumber B ${sf(q.B)}.</p><div class='banner ${ok?'ok':'bad'}'>${ok?'Seimbang: saldo setelah rekonsiliasi pembukuan dan bank sama.':'Belum seimbang: selisih Rp '+fmt(Math.abs(diff))+'. '+(Math.abs(oa-ob)>.005?'Saldo awal yang tersirat dari data berbeda (pembukuan Rp '+fmt(oa)+', bank Rp '+fmt(ob)+'), kemungkinan ada transaksi yang belum tercatat di salah satu sumber atau salah terbaca.':'Periksa klasifikasi transaksi.')}</div><div class='rpt'><div class='rh'>${esc(q.co)||'(isi nama perusahaan)'}<br>Rekonsiliasi Kas &amp; Bank<br>Periode ${esc(q.per)}</div><div class='rg'><div>${L.html}</div><div>${B.html}</div></div></div>`}
 function setCat(key,v){R.cat[key]=v;drawRep()}
 function drawDet(){
   const q=R;
@@ -402,7 +405,7 @@ function buildRecs(rows,hi,H,out,near,isHead,dateRe){
       out.push(cs.map((a,j)=>{
         if(![KEYS.deb,KEYS.kre,KEYS.bal,KEYS.amt].some(r=>r.test(H[j].s)))return a.map(x=>x.s).join(' ').trim();
         const t=a.flatMap(x=>x.s.split(/\s+/).map(w=>({w,xr:x.xr}))).filter(o=>/^\(?-?\d[\d.,]*\)?$/.test(o.w)&&/[.,]/.test(o.w));
-        const b=t.reduce((m,o)=>!m||Math.abs(o.xr-H[j].xr)<=Math.abs(m.xr-H[j].xr)?o:m,null);
+        const t2=t.filter(o=>/[.,]/.test(o.w)),b=(t2.length?t2:t).reduce((m,o)=>!m||Math.abs(o.xr-H[j].xr)<=Math.abs(m.xr-H[j].xr)?o:m,null);
         return b?b.w+(/\b(DB|DR)\b/.test(a.map(x=>x.s).join(' '))?' DB':''):''}));s=e+1});
   });
 }
