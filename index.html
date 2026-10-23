@@ -105,7 +105,7 @@ async function loadPdf(k,file){
     const lines=[];
     for(let p=1;p<=pdf.numPages;p++){
       const tc=await (await pdf.getPage(p)).getTextContent();
-      const its=tc.items.filter(i=>i.str.trim()).map(i=>({s:i.str.trim(),x:i.transform[4],y:i.transform[5],w:i.width}));
+      const its=tc.items.filter(i=>i.str.trim()).map(i=>{const s0=i.str.trim(),lead=/^(?:Rp|IDR)\.?\s*(?=\d)/i.test(s0),s=s0.replace(/(^|\s)(?:Rp|IDR)\.?\s*(?=\d)/gi,'$1').trim(),w=lead?i.width*s.length/s0.length:i.width;return {s,x:i.transform[4]+i.width-w,y:i.transform[5],w}});
       its.sort((a,b)=>b.y-a.y);
       let cur=null;
       its.forEach(i=>{if(!cur||Math.abs(cur.y-i.y)>3){cur={y:i.y,p,its:[]};lines.push(cur)}cur.its.push(i)});
@@ -449,7 +449,7 @@ function chainFix(o){
       const g=Math.round((x.b-o[j].b-x.amt)*100)/100;
       if(Math.abs(g)>=.01){
         if(Math.abs(g+2*x.amt)<.01)x.amt=-x.amt;
-        else res.push({i:1e6+(k++),day:x.day,desc:'[dibaca dari selisih saldo] dekat: '+x.desc.slice(0,40),amt:g,b:null,syn:true});
+        else res.push({i:1e6+(k++),day:null,desc:'[dibaca dari selisih saldo] antara: '+o[j].desc.slice(0,28)+' / '+x.desc.slice(0,28),amt:g,b:null,syn:true});
       }
     }
     res.push(x)});
