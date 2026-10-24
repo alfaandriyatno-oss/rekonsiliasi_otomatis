@@ -62,6 +62,7 @@ input[type=text]{padding:6px 8px;border:1px solid var(--line);border-radius:6px;
 td select{min-width:230px}
 .map,#go{display:none}
 .wrap td:first-child{white-space:nowrap}
+@media print{:root,:root:not([data-theme="light"]),:root[data-theme="dark"]{--bg:#fff;--card:#fff;--ink:#000;--line:#bbb;--mut:#333;--okbg:#fff;--okbg:#fff;--badbg:#fff;color-scheme:light}main>h1,main>p.sub,main>.grid,main>.card,#out>.card:first-child,#det,.noprint{display:none!important}body{background:#fff}.rpt,#ket{break-inside:avoid}}
 </style>
 </head>
 <body>
@@ -455,6 +456,45 @@ function chainFix(o){
     res.push(x)});
   return res}
 {const _l=load;load=function(k,f){S[k]=null;$('out').innerHTML='';$('n'+k).textContent='Membaca '+f.name+' ...';_l(k,f)}}
+function ketRows(){const q=R,res=[];
+  [['P','Pembukuan perusahaan'],['B','Pembukuan bank']].forEach(([s,sn])=>['add','sub'].forEach(t=>CT[s][t].forEach(([c,n])=>{
+    const it=[];[['A',q.oa],['B',q.ob]].forEach(([k,l])=>l.forEach(x=>{if(q.cat[k+x.i]===c)it.push({k,x})}));
+    if(it.length)res.push({sn,t:t==='add'?'Ditambah':'Dikurangi',n,it})})));
+  return res}
+function addKet(){
+  const q=R,K=ketRows(),gm=q.match.filter(m=>m.a.i===-1||m.b.i===-1).length;
+  const rows=K.map(g=>`<tr style='font-weight:600'><td colspan='4'>${g.sn} - ${g.t}: ${g.n}</td><td class='n'>${fmt(g.it.reduce((s,o)=>s+Math.abs(o.x.amt),0))}</td></tr>`+g.it.map(o=>`<tr><td>${dstr(o.x.day)}</td><td>Sumber ${o.k}</td><td colspan='2'>${esc(o.x.desc)}</td><td class='n'>${fmt(Math.abs(o.x.amt))}</td></tr>`).join('')).join('');
+  $('rep').insertAdjacentHTML('afterbegin',`<div class='row noprint' style='margin:0 0 12px'><button onclick='dlX()'>Unduh kertas kerja (Excel)</button><button class='ghost' onclick='window.print()'>Cetak / simpan PDF</button></div>`);
+  $('rep').insertAdjacentHTML('beforeend',`<div class='card wrap' id='ket'><h2>Keterangan</h2><p class='sub' style='margin:0 0 10px'>Transaksi yang cocok antara pembukuan dan bank: ${q.match.length} pasang${gm?' ('+gm+' gabungan beberapa transaksi)':''}.${K.length?' Penyesuaian di bawah ini adalah transaksi yang belum berpasangan.':' Tidak ada penyesuaian.'}</p>${K.length?`<table><tr><th>Tanggal</th><th>Sumber</th><th colspan='2'>Keterangan</th><th class='n'>Jumlah</th></tr>${rows}</table>`:''}</div>`)}
+{const _dr=drawRep;drawRep=function(){_dr();addKet()}}
+function dlX(){
+  try{
+  const q=R,T=tots(),sa=+q.sA||0,sb=+q.sB||0,pa=Math.max(CT.P.add.length,CT.B.add.length),ps=Math.max(CT.P.sub.length,CT.B.sub.length);
+  const sec=(S2,sal,t)=>{const a=S2.add.reduce((s,[c])=>s+(T[c]||0),0),d=S2.sub.reduce((s,[c])=>s+(T[c]||0),0),r=[[t,'',sal],['Ditambah:','','']];
+    S2.add.forEach(([c,n])=>r.push(['    '+n,T[c]||0,'']));for(let i=S2.add.length;i<pa;i++)r.push(['','','']);
+    r.push(['        Subtotal','',Math.round(a*100)/100],['        Penjumlahan','',Math.round((sal+a)*100)/100],['Dikurangi:','','']);
+    S2.sub.forEach(([c,n])=>r.push(['    '+n,T[c]||0,'']));for(let i=S2.sub.length;i<ps;i++)r.push(['','','']);
+    const fin=Math.round((sal+a-d)*100)/100;r.push(['        Subtotal','',Math.round(d*100)/100],['Saldo setelah rekonsiliasi','',fin]);return {r,fin}};
+  const L=sec(CT.P,sa,'Saldo menurut Pembukuan Perusahaan'),B=sec(CT.B,sb,'Saldo menurut Pembukuan Bank'),diff=Math.round((L.fin-B.fin)*100)/100;
+  const aoa=[[q.co],['Rekonsiliasi Kas & Bank'],['Periode '+q.per],[]];
+  L.r.forEach((x,i)=>aoa.push([...x,'',...B.r[i]]));
+  aoa.push([],['Selisih saldo setelah rekonsiliasi',diff,'Status: '+(diff===0?'Seimbang':'Belum seimbang')],['Dibuat otomatis pada '+new Date().toLocaleDateString('id-ID')]);
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:48},{wch:18},{wch:20},{wch:3},{wch:48},{wch:18},{wch:20}];
+  ws['!merges']=[0,1,2].map(r=>({s:{r,c:0},e:{r,c:6}}));
+  Object.keys(ws).forEach(a=>{if(a[0]!=='!'&&ws[a].t==='n')ws[a].z='#,##0.00'});
+  const kr=[['Sisi','Penyesuaian','Kategori','Tanggal','Sumber','Keterangan','Jumlah']];
+  ketRows().forEach(g=>{g.it.forEach(o=>kr.push([g.sn,g.t,g.n,dstr(o.x.day),'Sumber '+o.k,o.x.desc,Math.abs(o.x.amt)]));kr.push([g.sn,g.t,g.n,'','','Subtotal',g.it.reduce((s,o)=>s+Math.abs(o.x.amt),0)])});
+  if(kr.length===1)kr.push(['Tidak ada penyesuaian: semua transaksi sudah cocok.']);
+  const mr=[['Tanggal A','Keterangan A','Jumlah A','Tanggal B','Keterangan B','Jumlah B','Selisih hari','Jenis']];
+  q.match.forEach(m=>mr.push([dstr(m.a.day),m.a.desc,m.a.amt,dstr(m.b.day),m.b.desc,m.b.amt,m.dd,(m.a.i===-1||m.b.i===-1)?'Gabungan':'Satu-satu']));
+  const dr=l=>[['Tanggal','Keterangan','Jumlah','Saldo','Catatan'],...l.map(x=>[dstr(x.day),x.desc,x.amt,x.b!=null&&!isNaN(x.b)?x.b:'',x.syn?'Dibaca dari selisih saldo':''])];
+  const wb=XLSX.utils.book_new(),add=(n,a,w)=>{const s=XLSX.utils.aoa_to_sheet(a);s['!cols']=w.map(wch=>({wch}));Object.keys(s).forEach(k=>{if(k[0]!=='!'&&s[k].t==='n')s[k].z='#,##0.00'});XLSX.utils.book_append_sheet(wb,s,n)};
+  XLSX.utils.book_append_sheet(wb,ws,'Rekonsiliasi');
+  add('Keterangan',kr,[22,12,40,12,10,60,18]);add('Transaksi Cocok',mr,[12,50,16,12,50,16,10,10]);add('Data A',dr(q.A),[12,60,16,16,26]);add('Data B',dr(q.B),[12,60,16,16,26]);
+  const fn='Kertas_Kerja_Rekonsiliasi_'+String(q.co||'').replace(/[^A-Za-z0-9]+/g,'_')+'_'+String(q.per||'').replace(/[^A-Za-z0-9]+/g,'_')+'.xlsx';
+  XLSX.writeFile(wb,fn)
+  }catch(e){alert('Unduhan gagal: '+e.message+'. Buka file HTML langsung di browser atau di situs Anda, karena pratinjau tertentu memblokir unduhan.')}}
 function allT(l){return l.length?`<table><tr><th>Tanggal</th><th>Keterangan</th><th class='n'>Jumlah</th><th class='n'>Saldo</th></tr>${l.map(x=>`<tr><td>${dstr(x.day)}</td><td>${esc(x.desc)}</td><td class='n'>${fmt(x.amt)}</td><td class='n'>${x.b!=null&&!isNaN(x.b)?fmt(x.b):''}</td></tr>`).join('')}</table>`:`<div class='empty'>Tidak ada data.</div>`}
 function groupMatch(q){
   const tol=(+$('tol').value||0)+.005,dt=Math.max(+$('dt').value||0,10),ab=$('abs').checked,v=x=>Math.abs(x.amt);
