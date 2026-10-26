@@ -111,7 +111,7 @@ async function loadPdf(k,file){
       let cur=null;
       its.forEach(i=>{if(!cur||Math.abs(cur.y-i.y)>3){cur={y:i.y,p,its:[]};lines.push(cur)}cur.its.push(i)});
     }
-    const rows=lines.map(l=>{const c=[];l.its.sort((a,b)=>a.x-b.x).forEach(i=>{const t=c[c.length-1];if(t&&i.x-t.xr<6&&mny(t.s)===mny(i.s)){t.s+=' '+i.s;t.xr=i.x+i.w}else c.push({s:i.s,xl:i.x,xr:i.x+i.w,y:i.y})});c.p=l.p;c.y=l.y;return c}).filter(c=>c.length);
+    const rows=lines.map(l=>{const c=[];l.its.sort((a,b)=>a.x-b.x).forEach(i=>{const t=c[c.length-1];if(t&&i.x-t.xr<4&&mny(t.s)===mny(i.s)){t.s+=' '+i.s;t.xr=i.x+i.w}else c.push({s:i.s,xl:i.x,xr:i.x+i.w,y:i.y})});c.p=l.p;c.y=l.y;return c}).filter(c=>c.length);
     if(!rows.length)throw new Error('PDF tidak berisi teks (kemungkinan hasil scan). Gunakan PDF asli dari sistem atau bank, atau file Excel.');
     const isHead=c=>Object.keys(KEYS).filter(f=>c.some(x=>KEYS[f].test(x.s))).length>=3;
     const dateRe=/\d{1,4}[-\/.]\d{1,2}[-\/.]\d{2,4}|\d{1,2}[ -][A-Za-z]{3,}[ -]\d{2,4}/;
@@ -283,7 +283,7 @@ function guess(k,x){const t=x.desc.toLowerCase(),p=x.amt>0;
 function findCo(){
   for(const k of ['B','A']){const pre=(S[k]&&S[k].pre)||[];
     for(const t of pre){const m=t.match(/(?:nama(?:\s+(?:rekening|nasabah|perusahaan))?|account\s*name|name)\s*[:\-]\s*(.+)/i);if(m&&m[1].trim().length>2)return withEnt(m[1].trim(),S[k].fname)}
-    const e=pre.find(t=>/(^|\s)(PT|CV|UD|PD|Koperasi|Yayasan|Firma)\b\.?/i.test(t));if(e)return e.trim()}
+    const e=pre.find(t=>/(^|\s)(PT|CV|UD|PD|Koperasi|Yayasan|Firma)\b\.?/i.test(t));if(e){const mm=e.match(/\b(?:PT|CV|UD|PD)\b\.?(?:\s+[A-Z][A-Z&.\-]*(?=\s|$))+/);return (mm?mm[0]:e).trim()}}
   return ''}
 const BLN=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 function findPer(){
@@ -291,7 +291,7 @@ function findPer(){
   const d=R.B.map(x=>x.day).filter(x=>x!=null);if(!d.length)return '';
   const a=new Date(Math.min(...d)*864e5),b=new Date(Math.max(...d)*864e5),f=x=>x.getUTCDate()+' '+BLN[x.getUTCMonth()]+' '+x.getUTCFullYear();
   return a.getUTCMonth()===b.getUTCMonth()&&a.getUTCFullYear()===b.getUTCFullYear()?BLN[a.getUTCMonth()]+' '+a.getUTCFullYear():f(a)+' - '+f(b)}
-function lastBal(it){const w=it.filter(x=>x.b!=null&&!isNaN(x.b));if(!w.length)return null;let best=w[0];w.forEach(x=>{if((x.day??-1)>=(best.day??-1))best=x});return best.b}
+function lastBal(it){const w=it.filter(x=>x.b!=null&&!isNaN(x.b));if(!w.length)return null;let best=w[0];w.forEach(x=>{if((x.day??-1)>=(best.day??-1))best=x});let b=best.b;for(let i=it.indexOf(best)+1;i<it.length;i++){const x=it[i];if(!(x.b!=null&&!isNaN(x.b))&&!x.syn&&(x.day==null||best.day==null||x.day>=best.day))b+=x.amt}return Math.round(b*100)/100}
 function M(n){return `<span class='rp'><i>Rp</i><span>${n?fmt(n):'-'}</span></span>`}
 function tots(){const T={};[['A',R.oa],['B',R.ob]].forEach(([k,l])=>l.forEach(x=>{const c=R.cat[k+x.i];T[c]=(T[c]||0)+Math.abs(x.amt)}));for(const c in T)T[c]=Math.round(T[c]*100)/100;return T}
 function side(t,sal,S2,T){
@@ -311,7 +311,7 @@ function drawDet(){
   $('det').innerHTML=`<h2>Rincian transaksi</h2><div class='tabs'>${[['m','Cocok ('+q.match.length+')'],['a','Hanya di A ('+q.oa.length+')'],['b','Hanya di B ('+q.ob.length+')'],['x','Data A ('+q.A.length+')'],['y','Data B ('+q.B.length+')']].map(([k,l])=>`<button class='${tab===k?'on':''}' data-t='${k}' onclick='tab=this.dataset.t;drawDet()'>${l}</button>`).join('')}</div><div class='card wrap'>${tab==='m'?mt:tab==='x'?allT(q.A):tab==='y'?allT(q.B):one(tab==='a'?q.oa:q.ob,tab==='a'?'A':'B')}</div>`}
 function render(){
   const q=R;
-  if(!q.init){q.init=1;groupMatch(q);q.cat={};q.oa.forEach(x=>q.cat['A'+x.i]=guess('A',x));q.ob.forEach(x=>q.cat['B'+x.i]=guess('B',x));q.sA=lastBal(q.A)??'';q.sB=lastBal(q.B)??'';q.co=findCo();q.per=findPer()}
+  if(!q.init){q.init=1;groupMatch(q);q.cat={};q.oa.forEach(x=>q.cat['A'+x.i]=(q.pre&&q.pre['A'+x.i])||guess('A',x));q.ob.forEach(x=>q.cat['B'+x.i]=guess('B',x));q.sA=lastBal(q.A)??'';q.sB=lastBal(q.B)??'';q.co=findCo();q.per=findPer()}
   $('out').innerHTML=`<div class='card'><h2>Data laporan</h2><div class='set'><div style='flex:1;min-width:220px'><label for='co'>Nama perusahaan</label><input type='text' id='co'></div><div style='min-width:180px'><label for='per'>Periode</label><input type='text' id='per'></div><div><label for='sA'>Saldo akhir pembukuan (A)</label><input type='number' id='sA' step='any' style='width:170px'></div><div><label for='sB'>Saldo akhir bank (B)</label><input type='number' id='sB' step='any' style='width:170px'></div></div></div><div id='rep'></div><div id='det'></div>`;
   ['co','per','sA','sB'].forEach(id=>{const e=$(id);e.value=q[id];e.oninput=()=>{q[id]=e.type==='number'?(e.value===''?'':+e.value):e.value;drawRep()}});
   drawRep();drawDet();
@@ -329,8 +329,9 @@ const isNum=x=>typeof x==='number'||(typeof x==='string'&&day(x)==null&&/\d/.tes
 function pickBal(Rw,C){let best=-1,bs=.5;C.forEach(c=>{let h=0,t=0;Rw.forEach((r,i)=>{if(!i||!isNum(r[c])||!isNum(Rw[i-1][c]))return;const d=Math.abs(num(r[c])-num(Rw[i-1][c]));t++;if(d>0&&C.some(o=>o!==c&&[r[o],Rw[i-1][o]].some(y=>isNum(y)&&Math.abs(Math.abs(num(y))-d)<.011)))h++});if(t>3&&h/t>bs){bs=h/t;best=c}});return best}
 function infer(k){
   const D=S[k],H=D.headers,Rw=D.rows.slice(0,300),g=f=>$(k+'_'+f),get=f=>+g(f).value,set=(f,j)=>{g(f).value=j};
-  const C0=H.map((_,j)=>{const v=Rw.map(r=>r[j]).filter(x=>String(x??'').trim()!=='');const L=v.length||1;return{j,dt:v.filter(dtv).length/L,nm:v.filter(isNum).length/L,tx:v.reduce((s,x)=>s+String(x).length,0)/L,dc:v.filter(x=>/^(db|cr|dr|d|k|c|debit|kredit|credit|debet)$/i.test(String(x).trim())).length/L,sh:v.every(x=>String(x).trim().length<=4)}});
+  const C0=H.map((_,j)=>{const v=Rw.map(r=>r[j]).filter(x=>String(x??'').trim()!=='');const L=v.length||1;return{j,dt:v.filter(dtv).length/L,nm:v.filter(isNum).length/L,tx:v.reduce((s,x)=>s+String(x).length,0)/L,dc:v.filter(x=>/^(db|cr|dr|d|k|c|debit|kredit|credit|debet|inflow|outflow|masuk|keluar)$/i.test(String(x).trim())).length/L,sh:v.every(x=>String(x).trim().length<=4)}});
   const used=()=>FIELDS.map(([f])=>get(f));
+  if(get('bal')>=0&&get('amt')<0&&get('deb')<0&&get('kre')<0){const Cn=C0.filter(c=>c.nm>=.5&&c.dt<.5&&!c.sh&&![get('date'),get('desc')].includes(c.j)).map(c=>c.j);const bb=Cn.length>=2?pickBal(Rw,Cn):-1;if(bb>=0&&bb!==get('bal'))set('bal',bb)}
   if(get('date')<0){const b=C0.filter(c=>c.dt>=.5).sort((a,b)=>b.dt-a.dt)[0];if(b)set('date',b.j)}
   if(get('dc')<0){const b=C0.find(c=>c.dc>=.6&&!used().includes(c.j));if(b)set('dc',b.j)}
   if(get('desc')<0){const b=C0.filter(c=>c.dt<.5&&c.nm<.5&&c.dc<.6&&!used().includes(c.j)).sort((a,b)=>b.tx-a.tx)[0];if(b)set('desc',b.j)}
@@ -380,7 +381,7 @@ function extract(k){
   rows.forEach((r,i)=>{
     let amt=NaN;
     if(c.amt>=0&&c.amt!==c.bal&&c.deb<0&&c.kre<0){amt=num(r[c.amt]);
-      if(!isNaN(amt)&&c.dc>=0){const t=String(r[c.dc]).trim();let s=/^(db|dr|d|debit|debet)$/i.test(t)?-1:/^(cr|c|k|kredit|credit)$/i.test(t)?1:0;if(fl)s=-s;if(s)amt=s*Math.abs(amt)}
+      if(!isNaN(amt)&&c.dc>=0){const t=String(r[c.dc]).trim(),ex=/^(outflow|keluar|out|pengeluaran)$/i.test(t)?-1:/^(inflow|masuk|in|penerimaan)$/i.test(t)?1:0;let s=ex||(/^(db|dr|d|debit|debet)$/i.test(t)?-1:/^(cr|c|k|kredit|credit)$/i.test(t)?1:0);if(fl&&!ex)s=-s;if(s)amt=s*Math.abs(amt)}
       else if(!isNaN(amt)&&S[k].sfb&&c.bal>=0){const p=rows[asc?i-1:i+1];if(p&&isNum(p[c.bal])&&isNum(r[c.bal]))amt=(num(r[c.bal])>=num(p[c.bal])?1:-1)*Math.abs(amt)}}
     else if(c.deb>=0||c.kre>=0){const d=c.deb>=0?num(r[c.deb]):NaN,kr=c.kre>=0?num(r[c.kre]):NaN;
       if(!(isNaN(d)&&isNaN(kr))){const dd=isNaN(d)?0:Math.abs(d),kk=isNaN(kr)?0:Math.abs(kr);amt=fl?dd-kk:kk-dd}}
@@ -391,7 +392,7 @@ function extract(k){
 }
 function buildRecs(rows,hi,H,out,near,isHead,dateRe){
   const dc=H.findIndex(h=>KEYS.date.test(h.s)),n=H.length,hd=c=>isHead(c)&&c.some(x=>KEYS.date.test(x.s));
-  const junk=/further questions|help center|page \d+ of \d+|halaman \d+|\bsaldo (awal|akhir)\b|^\s*(account statement|created\b|dicetak|total\b|jumlah\b|grand total)/i,byPage={};
+  const junk=/further questions|help center|page \d+ of \d+|halaman \d+|\bsaldo (awal|akhir)\b|^\s*(account statement|created\b|dicetak|total\b|jumlah\b|grand total|ending balance|closing balance|ledger balance)/i,byPage={};
   rows.forEach((c,i)=>{if(i<hi)return;(byPage[c.p]=byPage[c.p]||[]).push(c)});
   Object.keys(byPage).forEach(p=>{
     let L=byPage[p];const h=L.findIndex(hd);
@@ -408,6 +409,20 @@ function buildRecs(rows,hi,H,out,near,isHead,dateRe){
     if(!di.length)return;
     const cut=[];
     for(let k=0;k<di.length-1;k++){let bj=di[k],bg=-1;for(let j=di[k];j<di[k+1];j++){const g=L[j].y-L[j+1].y;if(g>bg){bg=g;bj=j}}cut.push(bj)}
+    if(di.length>1)try{
+      const m=di.length,ay=di.map(i=>L[i].y),f=[],pv=[],last=L.length-1;
+      const rng=k=>k===m-1?[last,last]:[di[k],di[k+1]-1];
+      const cst=(k,s,e)=>Math.abs((L[s].y+L[e].y)/2-ay[k])-(e<last?.01*(L[e].y-L[e+1].y):0);
+      for(let k=0;k<m;k++){f.push({});pv.push({});const [a,b]=rng(k);
+        for(let e=a;e<=b;e++){
+          if(k===0){f[0][e]=cst(0,0,e);continue}
+          let best=1e12,bp=-1;const [pa,pb]=rng(k-1);
+          for(let p=pa;p<=pb;p++){if(f[k-1][p]==null)continue;const v=f[k-1][p]+cst(k,p+1,e);if(v<best){best=v;bp=p}}
+          if(bp>=0){f[k][e]=best;pv[k][e]=bp}}}
+      const c2=[];let e=last,ok=f[m-1][last]!=null;
+      for(let k=m-1;k>0&&ok;k--){e=pv[k][e];if(e==null)ok=false;else c2.unshift(e)}
+      if(ok&&c2.length===m-1)cut.splice(0,cut.length,...c2);
+    }catch(err){}
     const recs=[];let s=0;
     [...cut,L.length-1].forEach(e=>{const cs=H.map(()=>[]);L.slice(s,e+1).forEach(c=>c.flatMap(expand).filter(x=>!/^(rp|idr)\.?$/i.test(x.s.trim())).forEach(x=>cs[near(x)].push(x)));
       recs.push(cs.map((a,j)=>{
@@ -495,8 +510,31 @@ function dlX(){
   const fn='Kertas_Kerja_Rekonsiliasi_'+String(q.co||'').replace(/[^A-Za-z0-9]+/g,'_')+'_'+String(q.per||'').replace(/[^A-Za-z0-9]+/g,'_')+'.xlsx';
   XLSX.writeFile(wb,fn)
   }catch(e){alert('Unduhan gagal: '+e.message+'. Buka file HTML langsung di browser atau di situs Anda, karena pratinjau tertentu memblokir unduhan.')}}
+function clean(k){
+  const D=S[k],dj=+$(k+'_date').value,ej=+$(k+'_desc').value,cj=+$(k+'_dc').value;if(dj<0)return;
+  const out=[];let ld=null,lc=null;
+  D.rows.forEach(r=>{
+    const txt=r.filter(x=>String(x).trim()!=='').join(' ');
+    if(day(r[dj])!=null)ld=r[dj];
+    if(/saldo (awal|akhir)|opening balance|ledger balance|ending balance/i.test(txt))return;
+    if(cj>=0){if(String(r[cj]).trim()!=='')lc=r[cj];else if(lc!=null&&r.some((x,j)=>j!==dj&&isNum(x)))r[cj]=lc}
+    if(day(r[dj])!=null){out.push(r);return}
+    if(!txt||/saldo|total|jumlah|halaman|page/i.test(txt))return;
+    const hasNum=r.some((x,j)=>j!==ej&&j!==dj&&isNum(x)&&String(x).trim().length>3);
+    if(hasNum&&ld!=null){r[dj]=ld;out.push(r)}
+    else if(out.length&&ej>=0)out[out.length-1][ej]=(String(out[out.length-1][ej])+' '+txt).trim();
+  });
+  if(out.length)D.rows=out;
+}
+function signFix(q){
+  const bad=q.match.filter(m=>m.a.i!==-1&&m.b.i!==-1&&m.a.amt*m.b.amt<0);
+  if(!bad.length||bad.length>q.match.length*.3)return;
+  q.pre=q.pre||{};
+  bad.forEach(m=>{q.match.splice(q.match.indexOf(m),1);q.oa.push(m.a);q.ob.push(m.b);q.pre['A'+m.a.i]=m.a.amt<0?'ambilbesar':'setbesar'});
+}
 function allT(l){return l.length?`<table><tr><th>Tanggal</th><th>Keterangan</th><th class='n'>Jumlah</th><th class='n'>Saldo</th></tr>${l.map(x=>`<tr><td>${dstr(x.day)}</td><td>${esc(x.desc)}</td><td class='n'>${fmt(x.amt)}</td><td class='n'>${x.b!=null&&!isNaN(x.b)?fmt(x.b):''}</td></tr>`).join('')}</table>`:`<div class='empty'>Tidak ada data.</div>`}
 function groupMatch(q){
+  signFix(q);
   const tol=(+$('tol').value||0)+.005,dt=Math.max(+$('dt').value||0,10),ab=$('abs').checked,v=x=>Math.abs(x.amt);
   const ok=(a,b)=>a.day==null||b.day==null||Math.abs(a.day-b.day)<=dt;
   const find=(x,pool)=>{
