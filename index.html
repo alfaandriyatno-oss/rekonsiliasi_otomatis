@@ -319,7 +319,7 @@ function render(){
 $('demo').onclick=()=>{
   $('flipA').checked=true;
   setData('A',[['Tanggal','Keterangan','Debit','Kredit','Saldo'],['2026-09-02','Penerimaan PT Maju Jaya',15000000,'',115000000],['2026-09-04','Bayar supplier CV Sinar','',8700000,106300000],['2026-09-07','Penerimaan Toko Berkah',4200000,'',110500000],['2026-09-10','Gaji karyawan','',22500000,88000000],['2026-09-29','Setoran penerimaan PT Citra',9800000,'',97800000],['2026-09-30','Cek no 4412 CV Lestari','',3150000,94650000]],'buku_kas_contoh.csv');
-  setData('B',[['REKENING KORAN'],['Nama Rekening : CV DIVA BELLE COSMETICS'],['Periode : 01/09/2026 - 30/09/2026'],['Tgl','Uraian','Debit','Kredit','Saldo'],['02/09/2026','TRF MASUK PT MAJU JAYA','',15000000,115000000],['04/09/2026','TRF KELUAR CV SINAR',8700000,'',106300000],['07/09/2026','SETOR TUNAI TOKO BERKAH','',4200000,110500000],['10/09/2026','GAJI KARYAWAN',22500000,'',88000000],['25/09/2026','BUNGA JASA GIRO','',125000,88125000],['30/09/2026','BIAYA ADMIN BANK',50000,'',88075000]],'rekening_koran_contoh.csv');
+  setData('B',[['REKENING KORAN'],['Nama Rekening : PT ABC'],['Periode : 01/09/2026 - 30/09/2026'],['Tgl','Uraian','Debit','Kredit','Saldo'],['02/09/2026','TRF MASUK PT MAJU JAYA','',15000000,115000000],['04/09/2026','TRF KELUAR CV SINAR',8700000,'',106300000],['07/09/2026','SETOR TUNAI TOKO BERKAH','',4200000,110500000],['10/09/2026','GAJI KARYAWAN',22500000,'',88000000],['25/09/2026','BUNGA JASA GIRO','',125000,88125000],['30/09/2026','BIAYA ADMIN BANK',50000,'',88075000]],'rekening_koran_contoh.csv');
   run();
 };
 ['tol','dt','abs','flipA'].forEach(id=>$(id).addEventListener('change',()=>{if(S.A&&S.B)run()}));
