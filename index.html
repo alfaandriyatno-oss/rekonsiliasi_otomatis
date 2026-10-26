@@ -114,13 +114,13 @@ async function loadPdf(k,file){
     const rows=lines.map(l=>{const c=[];l.its.sort((a,b)=>a.x-b.x).forEach(i=>{const t=c[c.length-1];if(t&&i.x-t.xr<4&&mny(t.s)===mny(i.s)){t.s+=' '+i.s;t.xr=i.x+i.w}else c.push({s:i.s,xl:i.x,xr:i.x+i.w,y:i.y})});c.p=l.p;c.y=l.y;return c}).filter(c=>c.length);
     if(!rows.length)throw new Error('PDF tidak berisi teks (kemungkinan hasil scan). Gunakan PDF asli dari sistem atau bank, atau file Excel.');
     const isHead=c=>Object.keys(KEYS).filter(f=>c.some(x=>KEYS[f].test(x.s))).length>=3;
-    const dateRe=/\d{1,4}[-\/.]\d{1,2}[-\/.]\d{2,4}|\d{1,2}[ -][A-Za-z]{3,}[ -]\d{2,4}/;
+    const dateRe=/\d{1,4}[-\/.]\d{1,2}[-\/.]\d{2,4}|\d{1,2}[ -][A-Za-z]{3,}[ -]\d{2,4}|^\d{1,2}\/\d{1,2}$/;
     const hi=rows.findIndex(c=>isHead(c)&&c.some(x=>KEYS.date.test(x.s)));
     let aoa;
     if(hi>=0){
       const H=rows[hi],n=H.length,out=[H.map(c=>c.s)];
       const nc=j=>[KEYS.deb,KEYS.kre,KEYS.bal,KEYS.amt].some(r=>r.test(H[j].s)),mon=c=>{const t=c.s.trim().split(/\s+/);if(t.length<=2&&t.some(mny))return true;return /^\d+$/.test(c.s.trim())&&H.some((h,j)=>nc(j)&&Math.abs(c.xr-h.xr)<10)&&!H.some((h,j)=>!nc(j)&&Math.abs(c.xl-h.xl)<10)};
-      const near=c=>{const m=mon(c);let b=-1,bd=1e9;H.forEach((h,j)=>{if(nc(j)!==m)return;const d=m?Math.min(Math.abs(c.xr-h.xr),Math.abs((c.xl+c.xr)/2-(h.xl+h.xr)/2)):Math.abs(c.xl-h.xl);if(d<bd){bd=d;b=j}});if(b>=0)return b;H.forEach((h,j)=>{const d=Math.abs(c.xl-h.xl);if(d<bd){bd=d;b=j}});return b};
+      const hasDc=H.some(h=>KEYS.dc.test(h.s)),near=c=>{if(!hasDc&&/^(DB|DR|CR)$/i.test(c.s.trim())){let b2=-1,d2=1e9;H.forEach((h,j)=>{if(!nc(j))return;const d=Math.abs(c.xl-h.xr);if(d<d2){d2=d;b2=j}});if(b2>=0)return b2}const m=mon(c);let b=-1,bd=1e9;H.forEach((h,j)=>{if(nc(j)!==m)return;const d=m?Math.min(Math.abs(c.xr-h.xr),Math.abs((c.xl+c.xr)/2-(h.xl+h.xr)/2)):Math.abs(c.xl-h.xl);if(d<bd){bd=d;b=j}});if(b>=0)return b;H.forEach((h,j)=>{const d=Math.abs(c.xl-h.xl);if(d<bd){bd=d;b=j}});return b};
       const di=H.findIndex(h=>KEYS.desc.test(h.s));
       buildRecs(rows,hi,H,out,near,isHead,dateRe);
       [].forEach(c=>{
@@ -283,7 +283,7 @@ function guess(k,x){const t=x.desc.toLowerCase(),p=x.amt>0;
 function findCo(){
   for(const k of ['B','A']){const pre=(S[k]&&S[k].pre)||[];
     for(const t of pre){const m=t.match(/(?:nama(?:\s+(?:rekening|nasabah|perusahaan))?|account\s*name|name)\s*[:\-]\s*(.+)/i);if(m&&m[1].trim().length>2)return withEnt(m[1].trim(),S[k].fname)}
-    const e=pre.find(t=>/(^|\s)(PT|CV|UD|PD|Koperasi|Yayasan|Firma)\b\.?/i.test(t));if(e){const mm=e.match(/\b(?:PT|CV|UD|PD)\b\.?(?:\s+[A-Z][A-Z&.\-]*(?=\s|$))+/);return (mm?mm[0]:e).trim()}}
+    const e=pre.find(t=>/(^|\s)(PT|CV|UD|PD|Koperasi|Yayasan|Firma)\b\.?/i.test(t));if(e){const pm=e.match(/\b(?:PT|CV|UD|PD)\b\.?(?:\s+[A-Z][A-Z&.\-]*(?=\s|$))+/),sm=e.match(/(?:^|\s)((?:[A-Z][A-Z&\-]+\s+){1,6})(PT|CV|UD|PD)\b/);if(sm&&(!pm||sm.index<=pm.index))return (sm[2]+' '+sm[1]).trim();return (pm?pm[0]:e).trim()}}
   return ''}
 const BLN=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 function findPer(){
@@ -325,7 +325,7 @@ $('demo').onclick=()=>{
 ['tol','dt','abs','flipA'].forEach(id=>$(id).addEventListener('change',()=>{if(S.A&&S.B)run()}));
 const dtv=x=>typeof x!=='number'&&day(x)!=null;
 const isNum=x=>typeof x==='number'||(typeof x==='string'&&day(x)==null&&/\d/.test(x)&&/^[\s(\-]*[\d.,]+[\s)]*(DB|CR|DR)?\s*$/i.test(x)&&!isNaN(num(x)));
-{const _d=day;day=function(v){const r=_d(v);if(r!=null)return r;const m=String(v??'').trim().match(/^(\d{1,2})[\/\-](\d{1,2})$/);return m?Math.round(Date.UTC(window._yr||new Date().getFullYear(),m[2]-1,+m[1])/864e5):null}}
+{const _d=day;day=function(v){const r=_d(v);if(r!=null)return r;const m=String(v??'').trim().match(/^(\d{1,2})[\/\-](\d{1,2})(?![\d\/\-.])/);return m?Math.round(Date.UTC(window._yr||new Date().getFullYear(),m[2]-1,+m[1])/864e5):null}}
 function pickBal(Rw,C){let best=-1,bs=.5;C.forEach(c=>{let h=0,t=0;Rw.forEach((r,i)=>{if(!i||!isNum(r[c])||!isNum(Rw[i-1][c]))return;const d=Math.abs(num(r[c])-num(Rw[i-1][c]));t++;if(d>0&&C.some(o=>o!==c&&[r[o],Rw[i-1][o]].some(y=>isNum(y)&&Math.abs(Math.abs(num(y))-d)<.011)))h++});if(t>3&&h/t>bs){bs=h/t;best=c}});return best}
 function infer(k){
   const D=S[k],H=D.headers,Rw=D.rows.slice(0,300),g=f=>$(k+'_'+f),get=f=>+g(f).value,set=(f,j)=>{g(f).value=j};
@@ -392,7 +392,7 @@ function extract(k){
 }
 function buildRecs(rows,hi,H,out,near,isHead,dateRe){
   const dc=H.findIndex(h=>KEYS.date.test(h.s)),n=H.length,hd=c=>isHead(c)&&c.some(x=>KEYS.date.test(x.s));
-  const junk=/further questions|help center|page \d+ of \d+|halaman \d+|\bsaldo (awal|akhir)\b|^\s*(account statement|created\b|dicetak|total\b|jumlah\b|grand total|ending balance|closing balance|ledger balance)/i,byPage={};
+  const junk=/further questions|help center|page \d+ of \d+|halaman \d+|bersambung|mutasi (cr|db)\b|\bsaldo (awal|akhir)\b|^\s*(account statement|created\b|dicetak|total\b|jumlah\b|grand total|ending balance|closing balance|ledger balance)/i,byPage={};
   rows.forEach((c,i)=>{if(i<hi)return;(byPage[c.p]=byPage[c.p]||[]).push(c)});
   Object.keys(byPage).forEach(p=>{
     let L=byPage[p];const h=L.findIndex(hd);
@@ -409,7 +409,9 @@ function buildRecs(rows,hi,H,out,near,isHead,dateRe){
     if(!di.length)return;
     const cut=[];
     for(let k=0;k<di.length-1;k++){let bj=di[k],bg=-1;for(let j=di[k];j<di[k+1];j++){const g=L[j].y-L[j+1].y;if(g>bg){bg=g;bj=j}}cut.push(bj)}
-    if(di.length>1)try{
+    const isTop=(()=>{let t=0,p=0;for(let k=0;k<di.length-1;k++){if(di[k+1]-di[k]<3)continue;const inn=[];for(let j=di[k];j<di[k+1]-1;j++)inn.push(L[j].y-L[j+1].y);inn.sort((a,b)=>a-b);const med=inn[inn.length>>1],g=L[di[k+1]-1].y-L[di[k+1]].y;t++;if(g>=med*1.08)p++}return t>0&&p/t>=.7&&di[0]===0})();
+    if(isTop)cut.splice(0,cut.length,...di.slice(1).map(i=>i-1));
+    if(di.length>1&&!isTop)try{
       const m=di.length,ay=di.map(i=>L[i].y),f=[],pv=[],last=L.length-1;
       const rng=k=>k===m-1?[last,last]:[di[k],di[k+1]-1];
       const cst=(k,s,e)=>Math.abs((L[s].y+L[e].y)/2-ay[k])-(e<last?.01*(L[e].y-L[e+1].y):0);
@@ -451,9 +453,19 @@ function pdfPre(rows,h){
   return o}
 function withEnt(n,f){const t=String(f||'').replace(/\.[a-z]+$/i,'').replace(/[_.\-]+/g,' ').toUpperCase(),i=t.indexOf(n.toUpperCase());if(i<0)return n;let e=i+n.length;while(e<t.length&&t[e]!==' ')e++;const w=t.slice(0,i).trim().split(/\s+/).pop();return (/^(PT|CV|UD|PD)$/.test(w)?w+' ':'')+t.slice(i,e)}
 const mny=s=>/^\(?-?(?:\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|\d+[.,]\d{1,2})\)?$/.test(s);
+function chainSparse(o){
+  const idx=[];o.forEach((x,i)=>{if(x.b!=null&&!isNaN(x.b))idx.push(i)});
+  if(idx.length<3)return o;
+  const d=o.map(x=>x.day).filter(x=>x!=null);if(d.length&&d[0]>d[d.length-1])return o;
+  let okc=0;const gaps=[];
+  for(let k=1;k<idx.length;k++){const p=idx[k-1],i=idx[k];let s=0;for(let t=p+1;t<=i;t++)s+=o[t].amt;const g=Math.round((o[i].b-o[p].b-s)*100)/100;if(Math.abs(g)<.01)okc++;else gaps.push([i,g])}
+  if(okc<(idx.length-1)*.6||!gaps.length)return o;
+  const res=[];let k=0;
+  o.forEach((x,i)=>{const gp=gaps.find(g=>g[0]===i);if(gp)res.push({i:1e6+(k++),day:null,desc:'[dibaca dari selisih saldo] sebelum: '+x.desc.slice(0,30),amt:gp[1],b:null,syn:true});res.push(x)});
+  return res}
 function chainFix(o){
   const ok=x=>x.b!=null&&!isNaN(x.b),n=o.length;
-  if(n<4||o.filter(ok).length<n*.8)return o;
+  if(n<4||o.filter(ok).length<n*.8)return chainSparse(o);
   let cF=0,cR=0;
   for(let i=1;i<n;i++)if(ok(o[i])&&ok(o[i-1])&&Math.abs(o[i].b-o[i-1].b-o[i].amt)<.01)cF++;
   for(let i=0;i<n-1;i++)if(ok(o[i])&&ok(o[i+1])&&Math.abs(o[i].b-o[i+1].b-o[i].amt)<.01)cR++;
