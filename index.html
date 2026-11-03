@@ -297,7 +297,7 @@ function findPer(){
   return a.getUTCMonth()===b.getUTCMonth()&&a.getUTCFullYear()===b.getUTCFullYear()?BLN[a.getUTCMonth()]+' '+a.getUTCFullYear():f(a)+' - '+f(b)}
 function lastBal(it){const w=it.filter(x=>x.b!=null&&!isNaN(x.b));if(!w.length)return null;let best=w[0];w.forEach(x=>{if((x.day??-1)>=(best.day??-1))best=x});let b=best.b;for(let i=it.indexOf(best)+1;i<it.length;i++){const x=it[i];if(!(x.b!=null&&!isNaN(x.b))&&!x.syn&&(x.day==null||best.day==null||x.day>=best.day))b+=x.amt}return Math.round(b*100)/100}
 function M(n){return `<span class='rp'><i>Rp</i><span>${n?fmt(n):'-'}</span></span>`}
-function tots(){const T={};[['A',R.oa],['B',R.ob]].forEach(([k,l])=>l.forEach(x=>{const c=R.cat[k+x.i];T[c]=(T[c]||0)+Math.abs(x.amt)}));for(const c in T)T[c]=Math.round(T[c]*100)/100;return T}
+function tots(){if(skipRecon())return {};const T={};[['A',R.oa],['B',R.ob]].forEach(([k,l])=>l.forEach(x=>{const c=R.cat[k+x.i];T[c]=(T[c]||0)+Math.abs(x.amt)}));for(const c in T)T[c]=Math.round(T[c]*100)/100;return T}
 function side(t,sal,S2,T){
   const a=S2.add.reduce((s,[c])=>s+(T[c]||0),0),d=S2.sub.reduce((s,[c])=>s+(T[c]||0),0),fin=Math.round((sal+a-d)*100)/100;
   const li=l=>l.map(([c,n])=>`<tr class='i1'><td>${n}</td><td>${M(T[c]||0)}</td><td></td></tr>`).join('');
@@ -306,7 +306,7 @@ function drawRep(){
   const q=R,T=tots(),oa=(+q.sA||0)-q.A.reduce((s,x)=>s+x.amt,0),ob=(+q.sB||0)-q.B.reduce((s,x)=>s+x.amt,0),L=side('Saldo menurut Pembukuan Perusahaan',+q.sA||0,CT.P,T),B=side('Saldo menurut Pembukuan Bank',+q.sB||0,CT.B,T),diff=Math.round((L.fin-B.fin)*100)/100,ok=diff===0;
   const miss=(q.sA===''||q.sB==='')?`<p class='sub' style='margin:0 0 12px'>Kolom saldo belum terbaca. Isi saldo akhir secara manual pada kolom Data laporan.</p>`:'';
   const sf=l=>l.length+' transaksi (masuk Rp '+fmt(l.filter(x=>x.amt>0).reduce((s,x)=>s+x.amt,0))+', keluar Rp '+fmt(-l.filter(x=>x.amt<0).reduce((s,x)=>s+x.amt,0))+')';
-  $('rep').innerHTML=`${miss}<p class='sub' style='margin:0 0 12px'>Terbaca: Sumber A ${sf(q.A)}; Sumber B ${sf(q.B)}.</p>${[['A',q.A],['B',q.B]].map(([k,l])=>{const s=l.filter(x=>x.syn);return s.length?`<p class='sub' style='margin:0 0 12px;color:var(--warn)'>Perhatian: ${s.length} transaksi Sumber ${k} tidak terbaca langsung dari file dan dihitung dari selisih saldo (total Rp ${fmt(s.reduce((t,x)=>t+Math.abs(x.amt),0))}). Periksa file sumber di sekitar transaksi bertanda [dibaca dari selisih saldo].</p>`:''}).join('')}<div class='banner ${ok?'ok':'bad'}'>${ok?'Seimbang: saldo setelah rekonsiliasi pembukuan dan bank sama.':'Belum seimbang: selisih Rp '+fmt(Math.abs(diff))+'. '+(Math.abs(oa-ob)>.005?'Saldo awal yang tersirat dari data berbeda (pembukuan Rp '+fmt(oa)+', bank Rp '+fmt(ob)+'), kemungkinan ada transaksi yang belum tercatat di salah satu sumber atau salah terbaca.':'Periksa klasifikasi transaksi.')}</div><div class='rpt'><div class='rh'>${esc(q.co)||'(isi nama perusahaan)'}<br>Rekonsiliasi Kas &amp; Bank<br>Periode ${esc(q.per)}</div><div class='rg'><div>${L.html}</div><div>${B.html}</div></div></div>`}
+  $('rep').innerHTML=`${miss}<p class='sub' style='margin:0 0 12px'>Terbaca: Sumber A ${sf(q.A)}; Sumber B ${sf(q.B)}.</p>${[['A',q.A],['B',q.B]].map(([k,l])=>{const s=l.filter(x=>x.syn);return s.length?`<p class='sub' style='margin:0 0 12px;color:var(--warn)'>Perhatian: ${s.length} transaksi Sumber ${k} tidak terbaca langsung dari file dan dihitung dari selisih saldo (total Rp ${fmt(s.reduce((t,x)=>t+Math.abs(x.amt),0))}). Periksa file sumber di sekitar transaksi bertanda [dibaca dari selisih saldo].</p>`:''}).join('')}<div class='banner ${ok?'ok':'bad'}'>${ok?(skipRecon()?'Saldo akhir pembukuan dan bank sama, sehingga tidak ada penyesuaian yang diperlukan.':'Seimbang: saldo setelah rekonsiliasi pembukuan dan bank sama.'):'Belum seimbang: selisih Rp '+fmt(Math.abs(diff))+'. '+(Math.abs(oa-ob)>.005?'Saldo awal yang tersirat dari data berbeda (pembukuan Rp '+fmt(oa)+', bank Rp '+fmt(ob)+'), kemungkinan ada transaksi yang belum tercatat di salah satu sumber atau salah terbaca.':'Periksa klasifikasi transaksi.')}</div><div class='rpt'><div class='rh'>${esc(q.co)||'(isi nama perusahaan)'}<br>Rekonsiliasi Kas &amp; Bank<br>Periode ${esc(q.per)}</div><div class='rg'><div>${L.html}</div><div>${B.html}</div></div></div>`}
 function setCat(key,v){R.cat[key]=v;drawRep()}
 function drawDet(){
   const q=R;
@@ -487,7 +487,8 @@ function chainFix(o){
     res.push(x)});
   return res}
 {const _l=load;load=function(k,f){S[k]=null;$('out').innerHTML='';$('n'+k).textContent='Membaca '+f.name+' ...';_l(k,f)}}
-function ketRows(){const q=R,res=[];
+function skipRecon(){return !!R&&R.sA!==''&&R.sB!==''&&R.sA!=null&&R.sB!=null&&Math.abs((+R.sA)-(+R.sB))<.005}
+function ketRows(){const q=R,res=[];if(skipRecon())return res;
   [['P','Pembukuan perusahaan'],['B','Pembukuan bank']].forEach(([s,sn])=>['add','sub'].forEach(t=>CT[s][t].forEach(([c,n])=>{
     const it=[];[['A',q.oa],['B',q.ob]].forEach(([k,l])=>l.forEach(x=>{if(q.cat[k+x.i]===c)it.push({k,x})}));
     if(it.length)res.push({sn,t:t==='add'?'Ditambah':'Dikurangi',n,it})})));
@@ -496,7 +497,7 @@ function addKet(){
   const q=R,K=ketRows(),gm=q.match.filter(m=>m.a.i===-1||m.b.i===-1).length;
   const rows=K.map(g=>`<tr style='font-weight:600'><td colspan='4'>${g.sn} - ${g.t}: ${g.n}</td><td class='n'>${fmt(g.it.reduce((s,o)=>s+Math.abs(o.x.amt),0))}</td></tr>`+g.it.map(o=>`<tr><td>${dstr(o.x.day)}</td><td>Sumber ${o.k}</td><td colspan='2'>${esc(o.x.desc)}</td><td class='n'>${fmt(Math.abs(o.x.amt))}</td></tr>`).join('')).join('');
   $('rep').insertAdjacentHTML('afterbegin',`<div class='row noprint' style='margin:0 0 12px'><button onclick='dlX()'>Unduh kertas kerja (Excel)</button><button class='ghost' onclick='window.print()'>Cetak / simpan PDF</button></div>`);
-  $('rep').insertAdjacentHTML('beforeend',`<div class='card wrap' id='ket'><h2>Keterangan</h2><p class='sub' style='margin:0 0 10px'>Transaksi yang cocok antara pembukuan dan bank: ${q.match.length} pasang${gm?' ('+gm+' gabungan beberapa transaksi)':''}.${K.length?' Penyesuaian di bawah ini adalah transaksi yang belum berpasangan.':' Tidak ada penyesuaian.'}</p>${K.length?`<table><tr><th>Tanggal</th><th>Sumber</th><th colspan='2'>Keterangan</th><th class='n'>Jumlah</th></tr>${rows}</table>`:''}</div>`)}
+  $('rep').insertAdjacentHTML('beforeend',`<div class='card wrap' id='ket'><h2>Keterangan</h2><p class='sub' style='margin:0 0 10px'>Transaksi yang cocok antara pembukuan dan bank: ${q.match.length} pasang${gm?' ('+gm+' gabungan beberapa transaksi)':''}.${K.length?' Penyesuaian di bawah ini adalah transaksi yang belum berpasangan.':(skipRecon()&&(q.oa.length||q.ob.length)?' Ada '+(q.oa.length+q.ob.length)+' transaksi yang belum berpasangan, tetapi karena saldo akhir sama tidak dibuat penyesuaian.':' Tidak ada penyesuaian.')}</p>${K.length?`<table><tr><th>Tanggal</th><th>Sumber</th><th colspan='2'>Keterangan</th><th class='n'>Jumlah</th></tr>${rows}</table>`:''}</div>`)}
 {const _dr=drawRep;drawRep=function(){_dr();addKet()}}
 function dlX(){
   try{
