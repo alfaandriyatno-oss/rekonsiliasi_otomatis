@@ -66,7 +66,8 @@ td select{min-width:230px}
 .drop.on{border-style:solid;border-color:var(--ok);color:var(--ink)}
 #rep p.sub{max-width:none}
 .wrap td:first-child{white-space:nowrap}
-@media print{:root,:root:not([data-theme="light"]),:root[data-theme="dark"]{--bg:#fff;--card:#fff;--ink:#000;--line:#bbb;--mut:#333;--okbg:#fff;--okbg:#fff;--badbg:#fff;color-scheme:light}main>h1,main>p.sub,main>.grid,main>.card,#out>.card:first-child,#det,.noprint{display:none!important}body{background:#fff}.rpt,#ket{break-inside:avoid}}
+@media print{:root,:root:not([data-theme="light"]),:root[data-theme="dark"]{--bg:#fff;--card:#fff;--ink:#000;--line:#bbb;--mut:#333;--okbg:#fff;--okbg:#fff;--badbg:#fff;color-scheme:light}main>h1,main>p.sub,main>.grid,main>.card,#out>.card:first-child,#det,.noprint{display:none!important}body{background:#fff}.rpt{break-inside:avoid}#rep>*:not(.rpt):not(.printonly){display:none!important}.printonly{display:block!important}.printonly table{font-size:10.5px;min-width:0}.printonly h2,.printonly h3{break-after:avoid;margin:14px 0 6px}.printonly h2{font-size:17px}.printonly h3{font-size:13px}}
+.printonly{display:none}
 </style>
 </head>
 <body>
@@ -549,9 +550,46 @@ function signFix(q){
   q.pre=q.pre||{};
   bad.forEach(m=>{q.match.splice(q.match.indexOf(m),1);q.oa.push(m.a);q.ob.push(m.b);q.pre['A'+m.a.i]=m.a.amt<0?'ambilbesar':'setbesar'});
 }
+function looseMatch(q){
+  const tol=(+$('tol').value||0)+.005,W=31;
+  const cand=(a,b)=>Math.abs(Math.abs(a.amt)-Math.abs(b.amt))<=tol&&Math.sign(a.amt)===Math.sign(b.amt)&&(a.day==null||b.day==null||Math.abs(a.day-b.day)<=W);
+  const na=new Map(),nb=new Map();
+  q.oa.forEach(a=>q.ob.forEach(b=>{if(cand(a,b)){na.set(a,(na.get(a)||0)+1);nb.set(b,(nb.get(b)||0)+1)}}));
+  const ps=[];
+  q.oa.forEach(a=>q.ob.forEach(b=>{if(!cand(a,b))return;const s=sim(a.desc,b.desc),dd=(a.day!=null&&b.day!=null)?Math.abs(a.day-b.day):0;
+    if(s>=.2||(na.get(a)===1&&nb.get(b)===1))ps.push({a,b,dd,s,sc:dd+(1-s)*5})}));
+  ps.sort((x,y)=>x.sc-y.sc);
+  const ua=new Set(),ub=new Set();
+  ps.forEach(p=>{if(ua.has(p.a)||ub.has(p.b))return;ua.add(p.a);ub.add(p.b);q.match.push(p)});
+  q.oa=q.oa.filter(x=>!ua.has(x));q.ob=q.ob.filter(x=>!ub.has(x));
+}
+function manyMatch(q){
+  const dtw=Math.max(+$('dt').value||0,10);
+  const subs=(l,mk)=>{const r=[];const go=(i,s,sum)=>{if(s.length)r.push({it:s.slice(),sum});if(s.length>=mk)return;for(let j=i;j<l.length;j++){if(s.length&&Math.sign(l[j].amt)!==Math.sign(s[0].amt))continue;s.push(l[j]);go(j+1,s,sum+l[j].amt);s.pop()}};go(0,[],0);return r};
+  const grp=l=>{if(l.length===1)return l[0];const d=l.map(x=>x.day).filter(x=>x!=null);return {i:-1,day:d.length?Math.min(...d):null,desc:'['+l.length+' transaksi] '+l.map(x=>x.desc).join(' + '),amt:l.reduce((s,x)=>s+x.amt,0)}};
+  for(let g=0;g<20;g++){
+    const A=q.oa.slice(0,30),B=q.ob.slice(0,30);if(A.length<2||B.length<2)return;
+    const mb=new Map();subs(B,3).forEach(s=>{const k=Math.round(s.sum*100);if(!mb.has(k))mb.set(k,[]);mb.get(k).push(s)});
+    let hit=null;
+    for(const sa of subs(A,3)){const c=mb.get(Math.round(sa.sum*100));if(!c)continue;
+      const sb=c.find(s=>{if(sa.it.length===1&&s.it.length===1)return false;const d=[...sa.it,...s.it].map(x=>x.day).filter(x=>x!=null);return !d.length||Math.max(...d)-Math.min(...d)<=dtw});
+      if(sb){hit=[sa,sb];break}}
+    if(!hit)return;
+    const [sa,sb]=hit,a=grp(sa.it),b=grp(sb.it);
+    q.match.push({a,b,dd:(a.day!=null&&b.day!=null)?Math.abs(a.day-b.day):0,s:0});
+    q.oa=q.oa.filter(x=>!sa.it.includes(x));q.ob=q.ob.filter(x=>!sb.it.includes(x));
+  }
+}
+function catName(c){for(const s of ['P','B'])for(const t of ['add','sub']){const f=CT[s][t].find(x=>x[0]===c);if(f)return f[1]}return ''}
+function printHtml(){
+  const q=R,sk=skipRecon();
+  const mt=q.match.length?`<table><tr><th>Tgl A</th><th>Keterangan A</th><th class='n'>Jumlah A</th><th>Tgl B</th><th>Keterangan B</th><th class='n'>Jumlah B</th><th>Status</th></tr>${q.match.map(p=>`<tr><td>${dstr(p.a.day)}</td><td>${esc(p.a.desc)}</td><td class='n'>${fmt(p.a.amt)}</td><td>${dstr(p.b.day)}</td><td>${esc(p.b.desc)}</td><td class='n'>${fmt(p.b.amt)}</td><td>${(p.a.i===-1||p.b.i===-1)?'Gabungan':p.dd===0?'Tanggal sama':'Beda '+p.dd+' hari'}</td></tr>`).join('')}</table>`:`<p>Tidak ada.</p>`;
+  const un=(l,k)=>l.length?`<table><tr><th>Tanggal</th><th>Keterangan</th><th class='n'>Jumlah</th><th>Masuk laporan sebagai</th></tr>${l.map(x=>`<tr><td>${dstr(x.day)}</td><td>${esc(x.desc)}</td><td class='n'>${fmt(x.amt)}</td><td>${sk?'-':esc(catName(q.cat[k+x.i]))}</td></tr>`).join('')}</table>`:`<p>Tidak ada.</p>`;
+  return `<div class='printonly'><h2>Rincian transaksi</h2><h3>Transaksi cocok (${q.match.length})</h3>${mt}<h3>Hanya di pembukuan perusahaan (${q.oa.length})</h3>${un(q.oa,'A')}<h3>Hanya di bank (${q.ob.length})</h3>${un(q.ob,'B')}</div>`}
+{const _d2=drawRep;drawRep=function(){_d2();$('rep').insertAdjacentHTML('beforeend',printHtml())}}
 function allT(l){return l.length?`<table><tr><th>Tanggal</th><th>Keterangan</th><th class='n'>Jumlah</th><th class='n'>Saldo</th></tr>${l.map(x=>`<tr><td>${dstr(x.day)}</td><td>${esc(x.desc)}</td><td class='n'>${fmt(x.amt)}</td><td class='n'>${x.b!=null&&!isNaN(x.b)?fmt(x.b):''}</td></tr>`).join('')}</table>`:`<div class='empty'>Tidak ada data.</div>`}
 function groupMatch(q){
-  signFix(q);
+  signFix(q);looseMatch(q);
   const tol=(+$('tol').value||0)+.005,dt=Math.max(+$('dt').value||0,10),ab=$('abs').checked,v=x=>Math.abs(x.amt);
   const ok=(a,b)=>a.day==null||b.day==null||Math.abs(a.day-b.day)<=dt;
   const find=(x,pool)=>{
@@ -573,6 +611,7 @@ function groupMatch(q){
         xs.splice(xs.indexOf(x),1);g.forEach(y=>ys.splice(ys.indexOf(y),1));ch=true;break}
       if(ch)break}
   }
+  manyMatch(q);
   q.match.sort((x,y)=>(x.a.day||0)-(y.a.day||0));
 }
 </script>
