@@ -311,7 +311,7 @@ function drawRep(){
 function setCat(key,v){R.cat[key]=v;drawRep()}
 function drawDet(){
   const q=R;
-  const one=(l,k)=>l.length?`<table><tr><th>Tanggal</th><th>Keterangan</th><th class='n'>Jumlah</th><th>Masuk laporan sebagai</th></tr>${l.map(x=>`<tr><td>${dstr(x.day)}</td><td>${esc(x.desc)}</td><td class='n'>${fmt(x.amt)}</td><td><select data-k='${k}${x.i}' onchange='setCat(this.dataset.k,this.value)'>${optHtml(q.cat[k+x.i])}</select></td></tr>`).join('')}</table>`:`<div class='empty'>Tidak ada transaksi di sini.</div>`;
+  const one=(l,k)=>l.length?`<table><tr><th>Tanggal</th><th>Keterangan</th><th class='n'>Jumlah</th><th>Masuk laporan sebagai</th><th>Alasan belum cocok</th></tr>${l.map(x=>`<tr><td>${dstr(x.day)}</td><td>${esc(x.desc)}</td><td class='n'>${fmt(x.amt)}</td><td><select data-k='${k}${x.i}' onchange='setCat(this.dataset.k,this.value)'>${optHtml(q.cat[k+x.i])}</select></td><td style='font-size:12px;color:var(--mut);min-width:240px'>${esc(whyNot(x,k))}</td></tr>`).join('')}</table>`:`<div class='empty'>Tidak ada transaksi di sini.</div>`;
   const mt=q.match.length?`<table><tr><th>Tgl A</th><th>Keterangan A</th><th class='n'>Jumlah A</th><th>Tgl B</th><th>Keterangan B</th><th class='n'>Jumlah B</th><th>Status</th></tr>${q.match.map(p=>`<tr><td>${dstr(p.a.day)}</td><td>${esc(p.a.desc)}</td><td class='n'>${fmt(p.a.amt)}</td><td>${dstr(p.b.day)}</td><td>${esc(p.b.desc)}</td><td class='n'>${fmt(p.b.amt)}</td><td><span class='tag ${p.dd===0?'t1':'t2'}'>${p.dd===0?'Tanggal sama':'Beda '+p.dd+' hari'}</span></td></tr>`).join('')}</table>`:`<div class='empty'>Belum ada transaksi yang cocok.</div>`;
   $('det').innerHTML=`<h2>Rincian transaksi</h2><div class='tabs'>${[['m','Cocok ('+q.match.length+')'],['a','Hanya di A ('+q.oa.length+')'],['b','Hanya di B ('+q.ob.length+')'],['x','Data A ('+q.A.length+')'],['y','Data B ('+q.B.length+')']].map(([k,l])=>`<button class='${tab===k?'on':''}' data-t='${k}' onclick='tab=this.dataset.t;drawDet()'>${l}</button>`).join('')}</div><div class='card wrap'>${tab==='m'?mt:tab==='x'?allT(q.A):tab==='y'?allT(q.B):one(tab==='a'?q.oa:q.ob,tab==='a'?'A':'B')}</div>`}
 function render(){
@@ -587,6 +587,17 @@ function printHtml(){
   const un=(l,k)=>l.length?`<table><tr><th>Tanggal</th><th>Keterangan</th><th class='n'>Jumlah</th><th>Masuk laporan sebagai</th></tr>${l.map(x=>`<tr><td>${dstr(x.day)}</td><td>${esc(x.desc)}</td><td class='n'>${fmt(x.amt)}</td><td>${sk?'-':esc(catName(q.cat[k+x.i]))}</td></tr>`).join('')}</table>`:`<p>Tidak ada.</p>`;
   return `<div class='printonly'><h2>Rincian transaksi</h2><h3>Transaksi cocok (${q.match.length})</h3>${mt}<h3>Hanya di pembukuan perusahaan (${q.oa.length})</h3>${un(q.oa,'A')}<h3>Hanya di bank (${q.ob.length})</h3>${un(q.ob,'B')}</div>`}
 {const _d2=drawRep;drawRep=function(){_d2();$('rep').insertAdjacentHTML('beforeend',printHtml())}}
+function whyNot(x,k){
+  const other=k==='A'?R.ob:R.oa;
+  if(!other.length)return 'Tidak ada transaksi tersisa di sisi lawan untuk dicocokkan.';
+  let best=null,bs=1e18;
+  other.forEach(y=>{const da=Math.abs(Math.abs(x.amt)-Math.abs(y.amt)),dd=(x.day!=null&&y.day!=null)?Math.abs(x.day-y.day):0,s=da*1000+dd;if(s<bs){bs=s;best=y}});
+  const da=Math.abs(Math.abs(x.amt)-Math.abs(best.amt)),dd=(x.day!=null&&best.day!=null)?Math.abs(x.day-best.day):0;
+  const w=' di sisi lawan: '+dstr(best.day)+' '+best.desc.slice(0,28)+' ('+fmt(best.amt)+')';
+  if(da<.005&&x.amt*best.amt<0)return 'Nominal sama tetapi arah berlawanan (masuk/keluar)'+w;
+  if(da<.005)return (dd>31?'Nominal sama tetapi tanggal berbeda '+dd+' hari (lebih dari 31 hari)':'Nominal sama (tanggal beda '+dd+' hari) tetapi ambigu dengan transaksi lain dan keterangan tidak mirip')+w;
+  return 'Tidak ada nominal yang sama. Terdekat selisih Rp '+fmt(da)+w;
+}
 function allT(l){return l.length?`<table><tr><th>Tanggal</th><th>Keterangan</th><th class='n'>Jumlah</th><th class='n'>Saldo</th></tr>${l.map(x=>`<tr><td>${dstr(x.day)}</td><td>${esc(x.desc)}</td><td class='n'>${fmt(x.amt)}</td><td class='n'>${x.b!=null&&!isNaN(x.b)?fmt(x.b):''}</td></tr>`).join('')}</table>`:`<div class='empty'>Tidak ada data.</div>`}
 function groupMatch(q){
   signFix(q);looseMatch(q);
