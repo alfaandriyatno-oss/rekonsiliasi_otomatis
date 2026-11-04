@@ -373,7 +373,7 @@ function clean(k){
   window._yr=(pr.join(' ').match(/20\d\d/)||[])[0];
   _s2(k,a2,name,pr);
   if(!S[k])return;
-  S[k].fname=name;
+  S[k].fname=name;S[k].open=aoa.open;
   infer(k);clean(k);
   $('n'+k).textContent=name+' ('+S[k].rows.length+' baris)';
   $('m'+k).insertAdjacentHTML('beforeend','<div style="grid-column:1/-1;font-size:12px;color:var(--mut)">Kolom terdeteksi otomatis. Ubah jika kurang tepat.</div>');
@@ -393,7 +393,7 @@ function extract(k){
     if(isNaN(amt))return;
     out.push({i,day:c.date>=0?day(r[c.date]):null,desc:c.desc>=0?String(r[c.desc]):'',amt,b:c.bal>=0?num(r[c.bal]):null});
   });
-  return chainFix(out);
+  return chainFix(out,S[k].open);
 }
 function buildRecs(rows,hi,H,out,near,isHead,dateRe){
   const dc=H.findIndex(h=>KEYS.date.test(h.s)),n=H.length,hd=c=>isHead(c)&&c.some(x=>KEYS.date.test(x.s));
@@ -403,11 +403,15 @@ function buildRecs(rows,hi,H,out,near,isHead,dateRe){
     let L=byPage[p];const h=L.findIndex(hd);
     if(h>=0)L=L.slice(h+1);
     L=L.filter(c=>!junk.test(c.map(x=>x.s).join(' ')));
+    {const dtok=/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/;
+     L=L.map(c=>{const n=c.flatMap(x=>{const w=x.s.trim().split(/\s+/);if(w.length<2||x.xl>H[dc].xr||near(x)===dc)return [x];const k=w.findIndex(t=>dtok.test(t.replace(/,$/,'')));if(k<0)return [x];return [{s:w[k].replace(/,$/,''),xl:H[dc].xl,xr:H[dc].xr,y:x.y},{s:w.filter((_,i)=>i!==k).join(' '),xl:x.xl,xr:x.xr,y:x.y}]}).filter(x=>String(x.s).trim()!=='');n.p=c.p;n.y=c.y;return n})}
     const nh=H.filter(h=>[KEYS.deb,KEYS.kre,KEYS.bal,KEYS.amt].some(r=>r.test(h.s)));
     const expand=c=>{const w=c.s.trim().split(/\s+/);if(w.length<2)return [c];const Ln=c.s.length,W=c.xr-c.xl,o=[],rest=[];let pos=0;
       w.forEach(t=>{const s0=c.s.indexOf(t,pos);pos=s0+t.length;const xr=c.xl+W*pos/Ln;
-        if(/^\(?-?\d[\d.,]*\)?$/.test(t)&&/[.,]/.test(t)&&nh.some(h=>Math.abs(xr-h.xr)<20))o.push({s:t,xl:c.xl+W*s0/Ln,xr,y:c.y});else rest.push(t)});
-      if(!o.length)return [c];return rest.length?[{s:rest.join(' '),xl:c.xl,xr:c.xr,y:c.y},...o]:o};
+        if(/^\(?-?\d[\d.,]*\)?$/.test(t)&&/[.,]/.test(t)&&nh.some(h=>Math.abs(xr-h.xr)<60))o.push({s:t,xl:c.xl+W*s0/Ln,xr,y:c.y});else rest.push({t,s0})});
+      if(!o.length)return [c];
+      const rr=rest.filter(r=>!/^(rp|idr)\.?$/i.test(r.t));
+      return rr.length?[{s:rr.map(r=>r.t).join(' '),xl:c.xl+W*rr[0].s0/Ln,xr:c.xr,y:c.y},...o]:o};
     let di=[];L.forEach((c,i)=>{if(c.some(x=>near(x)===dc&&dateRe.test(x.s)))di.push(i)});
     const dl=di.slice();let byBal=false;const bj=H.findIndex(h=>KEYS.bal.test(h.s));
     if(bj>=0){const bi=[];L.forEach((c,i)=>{if(c.flatMap(expand).some(x=>/^\(?-?\d[\d.,]*\)?$/.test(x.s.trim())&&/[.,]/.test(x.s)&&near(x)===bj))bi.push(i)});if(bi.length>di.length){di=bi;byBal=true}}
@@ -468,7 +472,8 @@ function chainSparse(o){
   const res=[];let k=0;
   o.forEach((x,i)=>{const gp=gaps.find(g=>g[0]===i);if(gp)res.push({i:1e6+(k++),day:null,desc:'[dibaca dari selisih saldo] sebelum: '+x.desc.slice(0,30),amt:gp[1],b:null,syn:true});res.push(x)});
   return res}
-function chainFix(o){
+function chainFix(o,open){const v=open!=null&&!isNaN(open)&&o.length;const r=chainFix0(v?[{virt:true,b:open,amt:0,day:null,desc:''},...o]:o);return v?r.filter(x=>!x.virt):r}
+function chainFix0(o){
   const ok=x=>x.b!=null&&!isNaN(x.b),n=o.length;
   if(n<4||o.filter(ok).length<n*.8)return chainSparse(o);
   let cF=0,cR=0;
@@ -534,7 +539,7 @@ function clean(k){
   D.rows.forEach(r=>{
     const txt=r.filter(x=>String(x).trim()!=='').join(' ');
     if(day(r[dj])!=null)ld=r[dj];
-    if(/saldo (awal|akhir)|opening balance|ledger balance|ending balance/i.test(txt))return;
+    if(/saldo (awal|akhir)|opening balance|ledger balance|ending balance/i.test(txt)){const bj=+$(k+'_bal').value;if(/saldo awal|opening balance|ledger balance/i.test(txt)&&bj>=0&&isNum(r[bj])&&D.open==null)D.open=num(r[bj]);return}
     if(cj>=0){if(String(r[cj]).trim()!=='')lc=r[cj];else if(lc!=null&&r.some((x,j)=>j!==dj&&isNum(x)))r[cj]=lc}
     if(day(r[dj])!=null){out.push(r);return}
     if(!txt||/saldo|total|jumlah|halaman|page/i.test(txt))return;
